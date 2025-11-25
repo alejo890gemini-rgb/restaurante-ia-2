@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0A0A0A" />
+    
+    <!-- PWA Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Loco Alitas" />
+    <meta name="application-name" content="Loco Alitas" />
+    
+    <link rel="manifest" href="/manifest.json" />
+    
+    <title>Loco Alitas Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --primary-red: #E91D24;
+        --dark-red: #c01318;
+        --black-bg: #0A0A0A;
+        --card-bg: #141414;
+        --card-border: #262626;
+        --accent-yellow: #FFC300;
+        --text-primary: #F5F5F5;
+        --text-secondary: #A3A3A3;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--black-bg);
+        background-image: radial-gradient(var(--card-border) 1px, transparent 1px);
+        background-size: 20px 20px;
+        color: var(--text-primary);
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile app */
+      }
+      .font-bangers {
+        font-family: 'Bangers', cursive;
+      }
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--card-bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--card-border);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3f3f46;
+      }
+
+      /* Print styles - Universal Thermal Receipt Support */
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        
+        .printable-content, .printable-content * {
+          visibility: visible !important;
+          color: black !important;
+          text-shadow: none !important;
+        }
+
+        .printable-content {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          background: white;
+          z-index: 9999;
+          display: block !important; /* Force display */
+        }
+        
+        .no-print {
+          display: none !important;
+        }
+        
+        @page {
+            margin: 0;
+            size: auto;
+        }
+      }
+
+      /* Toast notification styles */
+      .toast-container {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .toast {
+        animation: slideInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+      }
+      @keyframes slideInUp {
+        from {
+          opacity: 0;
+          transform: translateY(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "vite": "https://aistudiocdn.com/vite@^7.2.2",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+        "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.83.0",
+        "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "chart.js": "https://aistudiocdn.com/chart.js@^4.5.1",
+        "react-chartjs-2": "https://aistudiocdn.com/react-chartjs-2@^5.3.1"
+      }
+    }
+    </script>
+  </head>
+  <body class="bg-[var(--black-bg)]">
+    <div id="root"></div>
+    <audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto" crossorigin="anonymous"></audio>
+    <audio id="kitchen-bell-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto" crossorigin="anonymous"></audio>
+    
+    <!-- Service Worker Registration for PWA -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('SW registered: ', registration);
+            })
+            .catch(registrationError => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+    
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

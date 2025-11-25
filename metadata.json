@@ -1,0 +1,8 @@
+{
+  "name": "RESTAURANTE IA PRO",
+  "description": "Una aplicación integral de gestión de restaurantes inspirada en Fudo y Treinta, con módulos para POS, gestión de menús, diseño de mesas y reportes de ventas. Incluye funciones impulsadas por IA utilizando la API de Gemini para mejorar la productividad.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}

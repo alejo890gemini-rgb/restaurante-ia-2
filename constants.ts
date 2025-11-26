@@ -1,6 +1,10 @@
 
 
-import type { MenuItem, Sauce, Table, InventoryItem, Role, User, Permission, Zone, PrinterSettings, CategoryConfig, LoyaltyTier, LoyaltyReward, LoyaltySettings } from './types';
+import type { Sede, MenuItem, Sauce, Table, InventoryItem, Role, User, Permission, Zone, PrinterSettings, CategoryConfig, LoyaltyTier, LoyaltyReward, LoyaltySettings } from './types';
+
+export const INITIAL_SEDES: Sede[] = [
+    { id: 'sede-principal', name: 'Sede Principal', address: 'Av. Siempre Viva 123' }
+];
 
 export const SALSAS_ALITAS: Sauce[] = [
     { name: "BBQ", key: "BBQ" },
@@ -126,7 +130,7 @@ const LOCO_ALITAS_CATEGORIZED_MENU = [
     },
 ];
 
-export const INITIAL_MENU_ITEMS: MenuItem[] = LOCO_ALITAS_CATEGORIZED_MENU.flatMap(category =>
+export const BASE_MENU_ITEMS: MenuItem[] = LOCO_ALITAS_CATEGORIZED_MENU.flatMap(category =>
   category.items.map(item => ({
     id: item.id,
     name: item.name,
@@ -139,37 +143,38 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = LOCO_ALITAS_CATEGORIZED_MENU.flatM
     maxChoices: item.maxChoices,
     imageUrl: '', // Initialize with empty string
     recipe: [], // Initialize with empty recipe
+    sedeId: null, // Master item
   }))
 );
 
 export const INITIAL_ZONES: Zone[] = [
-    { id: 'zone-main', name: 'Salón Principal' },
-    { id: 'zone-terrace', name: 'Terraza' },
+    { id: 'zone-main', name: 'Salón Principal', sedeId: 'sede-principal' },
+    { id: 'zone-terrace', name: 'Terraza', sedeId: 'sede-principal' },
 ];
 
 export const INITIAL_TABLES: Table[] = [
-  { id: 't-1', name: 'Mesa 1', capacity: 2, status: 'available', zoneId: 'zone-main', x: 50, y: 50 },
-  { id: 't-2', name: 'Mesa 2', capacity: 4, status: 'occupied', zoneId: 'zone-main', x: 150, y: 50 },
-  { id: 't-3', name: 'Mesa 3', capacity: 4, status: 'available', zoneId: 'zone-main', x: 250, y: 50 },
-  { id: 't-4', name: 'Mesa 4', capacity: 6, status: 'cleaning', zoneId: 'zone-main', x: 50, y: 150 },
-  { id: 't-5', name: 'Mesa 5', capacity: 2, status: 'reserved', zoneId: 'zone-main', x: 150, y: 150 },
-  { id: 't-6', name: 'Barra 1', capacity: 1, status: 'available', zoneId: 'zone-main', x: 350, y: 50 },
-  { id: 't-7', name: 'Barra 2', capacity: 1, status: 'available', zoneId: 'zone-main', x: 350, y: 100 },
-  { id: 't-8', name: 'Patio 1', capacity: 8, status: 'available', zoneId: 'zone-terrace', x: 50, y: 50 },
+  { id: 't-1', name: 'Mesa 1', capacity: 2, status: 'available', zoneId: 'zone-main', x: 50, y: 50, sedeId: 'sede-principal' },
+  { id: 't-2', name: 'Mesa 2', capacity: 4, status: 'occupied', zoneId: 'zone-main', x: 150, y: 50, sedeId: 'sede-principal' },
+  { id: 't-3', name: 'Mesa 3', capacity: 4, status: 'available', zoneId: 'zone-main', x: 250, y: 50, sedeId: 'sede-principal' },
+  { id: 't-4', name: 'Mesa 4', capacity: 6, status: 'cleaning', zoneId: 'zone-main', x: 50, y: 150, sedeId: 'sede-principal' },
+  { id: 't-5', name: 'Mesa 5', capacity: 2, status: 'reserved', zoneId: 'zone-main', x: 150, y: 150, sedeId: 'sede-principal' },
+  { id: 't-6', name: 'Barra 1', capacity: 1, status: 'available', zoneId: 'zone-main', x: 350, y: 50, sedeId: 'sede-principal' },
+  { id: 't-7', name: 'Barra 2', capacity: 1, status: 'available', zoneId: 'zone-main', x: 350, y: 100, sedeId: 'sede-principal' },
+  { id: 't-8', name: 'Patio 1', capacity: 8, status: 'available', zoneId: 'zone-terrace', x: 50, y: 50, sedeId: 'sede-principal' },
 ];
 
 export const INITIAL_INVENTORY_ITEMS: InventoryItem[] = [
-    { id: 'inv-1', name: 'Alitas de Pollo', stock: 20, unit: 'kg', cost: 15000, alertThreshold: 5 },
-    { id: 'inv-2', name: 'Papas Crudas', stock: 30, unit: 'kg', cost: 3000, alertThreshold: 10 },
-    { id: 'inv-3', name: 'Carne de Hamburguesa', stock: 50, unit: 'unidad', cost: 4000, alertThreshold: 10 },
-    { id: 'inv-4', name: 'Pan de Hamburguesa', stock: 50, unit: 'unidad', cost: 800, alertThreshold: 10 },
-    { id: 'inv-5', name: 'Salsa BBQ', stock: 5, unit: 'L', cost: 20000, alertThreshold: 1 },
-    { id: 'inv-6', name: 'Queso Cheddar', stock: 2, unit: 'kg', cost: 35000, alertThreshold: 0.5 },
+    { id: 'inv-1', name: 'Alitas de Pollo', stock: 20, unit: 'kg', cost: 15000, alertThreshold: 5, sedeId: 'sede-principal' },
+    { id: 'inv-2', name: 'Papas Crudas', stock: 30, unit: 'kg', cost: 3000, alertThreshold: 10, sedeId: 'sede-principal' },
+    { id: 'inv-3', name: 'Carne de Hamburguesa', stock: 50, unit: 'unidad', cost: 4000, alertThreshold: 10, sedeId: 'sede-principal' },
+    { id: 'inv-4', name: 'Pan de Hamburguesa', stock: 50, unit: 'unidad', cost: 800, alertThreshold: 10, sedeId: 'sede-principal' },
+    { id: 'inv-5', name: 'Salsa BBQ', stock: 5, unit: 'L', cost: 20000, alertThreshold: 1, sedeId: 'sede-principal' },
+    { id: 'inv-6', name: 'Queso Cheddar', stock: 2, unit: 'kg', cost: 35000, alertThreshold: 0.5, sedeId: 'sede-principal' },
 ];
 
 export const EXPENSE_CATEGORIES: string[] = ['Proveedores', 'Nómina', 'Arriendo', 'Servicios', 'Marketing', 'Impuestos', 'Mantenimiento', 'Varios'];
 
-export const MENU_CATEGORIES = [...new Set(INITIAL_MENU_ITEMS.map(item => item.category))];
+export const MENU_CATEGORIES = [...new Set(BASE_MENU_ITEMS.map(item => item.category))];
 
 // Category Color Palette
 export const CATEGORY_PALETTE = [
@@ -236,6 +241,7 @@ export const AVAILABLE_PERMISSIONS: { key: Permission; label: string }[] = [
     { key: 'MANAGE_MARKETING', label: 'Marketing IA' },
     { key: 'MANAGE_QR', label: 'Gestor de Menú QR' },
     { key: 'MANAGE_SETTINGS', label: 'Configuración (Usuarios y Roles)' },
+    { key: 'MANAGE_SEDES', label: 'Gestionar Sedes' },
 ];
 
 export const INITIAL_ROLES: Role[] = [
@@ -264,6 +270,7 @@ export const INITIAL_USERS: User[] = [
         username: 'admin',
         password: '123', // Simple default for demo
         roleId: 'role-admin',
+        sedeId: 'sede-principal',
     },
     {
         id: 'user-waiter',
@@ -271,6 +278,7 @@ export const INITIAL_USERS: User[] = [
         username: 'mesero',
         password: '123',
         roleId: 'role-waiter',
+        sedeId: 'sede-principal',
     },
     {
         id: 'user-chef',
@@ -278,6 +286,7 @@ export const INITIAL_USERS: User[] = [
         username: 'chef',
         password: '123',
         roleId: 'role-chef',
+        sedeId: 'sede-principal',
     },
 ];
 

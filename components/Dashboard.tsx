@@ -1,6 +1,5 @@
-
 import React from 'react';
-import type { Sale, MenuItem, Table, PaymentMethod, User } from '../types';
+import type { Sale, MenuItem, Table, PaymentMethod, User, Sede } from '../types';
 import { formatPrice } from '../utils/formatPrice';
 import { ProfeLoco } from './ProfeLoco';
 
@@ -10,6 +9,8 @@ interface DashboardProps {
   tables: Table[];
   users: User[];
   currentUser: User;
+  sedes: Sede[];
+  selectedSedeId: string;
 }
 
 const StatCard: React.FC<{ title: string; value: string; subtext?: string; icon: React.ReactNode; color: string }> = ({ title, value, subtext, icon, color }) => (
@@ -27,7 +28,7 @@ const StatCard: React.FC<{ title: string; value: string; subtext?: string; icon:
 );
 
 
-export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, users, currentUser }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, users, currentUser, sedes, selectedSedeId }) => {
   const todaySales = sales.filter(sale => new Date(sale.timestamp).toDateString() === new Date().toDateString());
   const totalRevenue = todaySales.reduce((acc, sale) => acc + sale.total, 0);
   const totalOrders = todaySales.length;
@@ -63,6 +64,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
       const tableName = tables.find(t => t.id === sale.order.tableId)?.name;
       return `🍽️ ${tableName || 'Mesa N/A'}`;
   }
+  
+  const viewTitle = selectedSedeId === 'global' ? 'Visión Global' : (sedes.find(s => s.id === selectedSedeId)?.name || 'Dashboard');
 
   return (
     <div className="space-y-8">
@@ -71,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
             <h2 className="text-4xl font-bold text-white font-bangers tracking-wide">
                 HOLA, <span className="text-[var(--accent-yellow)]">{currentUser.name.split(' ')[0].toUpperCase()}</span>
             </h2>
-            <p className="text-gray-400 text-sm">Resumen de operación en tiempo real</p>
+            <p className="text-gray-400 text-sm">Estás viendo: <span className="font-bold text-purple-400">{viewTitle}</span></p>
         </div>
       </div>
       
@@ -79,7 +82,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
         <StatCard title="Ventas de Hoy" value={formatPrice(totalRevenue)} subtext={`${totalOrders} órdenes completadas`} color="from-emerald-500 to-emerald-700" icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
         <StatCard title="Mesas Disponibles" value={`${availableTables}`} subtext={`de ${tables.length} totales`} color="from-blue-500 to-blue-700" icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h6m-6 4h6m-6 4h6" /></svg>} />
         <StatCard title="Mesas Ocupadas" value={`${occupiedTables}`} subtext={`${((occupiedTables / tables.length) * 100 || 0).toFixed(0)}% de ocupación`} color="from-red-500 to-red-700" icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
-        <StatCard title="Platillos Activos" value={menuItems.length.toString()} subtext="En menú principal" color="from-purple-500 to-purple-700" icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>} />
+        <StatCard title="Platillos Activos" value={menuItems.length.toString()} subtext="En esta vista" color="from-purple-500 to-purple-700" icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>} />
       </div>
 
       <div className="mb-8">
@@ -103,7 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
                 </tr>
               </thead>
               <tbody>
-                {sales.slice(0, 5).map(sale => (
+                {todaySales.slice(0, 5).map(sale => (
                   <tr key={sale.id} className="border-b border-[var(--card-border)] hover:bg-white/5 transition-colors">
                     <td className="px-4 py-4 font-mono text-gray-400">#{sale.id.slice(-4)}</td>
                     <td className="px-4 py-4 font-medium text-white">{getSaleDestination(sale)}</td>
@@ -116,7 +119,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
                     <td className="px-4 py-4 text-right text-gray-500">{new Date(sale.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                   </tr>
                 ))}
-                {sales.length === 0 && (
+                {todaySales.length === 0 && (
                   <tr>
                     <td colSpan={5} className="text-center py-12 text-gray-500 italic">No hay ventas registradas hoy.</td>
                   </tr>

@@ -260,15 +260,14 @@ class BluetoothPrinter {
         }
     }
 
-    async printOrder(order: Order, settings: PrinterSettings, type: 'customer' | 'kitchen', tables: Table[], specificItems?: OrderItem[]) {
+    async printOrder(order: Order, settings: PrinterSettings, type: 'customer' | 'kitchen', tables: Table[], isAddition?: boolean) {
         const builder = new ReceiptBuilder();
         const tableName = order.orderType === 'dine-in' 
             ? (tables.find(t => t.id === order.tableId)?.name || 'Mesa ?') 
             : (order.orderType === 'delivery' ? 'DELIVERY' : 'LLEVAR');
         
         const clientName = order.orderType === 'delivery' ? order.deliveryInfo?.name : order.toGoName;
-        const itemsToPrint = specificItems || order.items;
-        const isPartialPrint = specificItems && specificItems.length < order.items.length;
+        const itemsToPrint = order.items;
 
         // --- HEADER ---
         builder.align(1).bold(true).size(1);
@@ -276,7 +275,7 @@ class BluetoothPrinter {
             builder.textLn(settings.shopName.toUpperCase());
         } else {
             builder.textLn("** COCINA **");
-            if (isPartialPrint) {
+            if (isAddition) {
                 builder.textLn("** ADICION **");
             }
         }

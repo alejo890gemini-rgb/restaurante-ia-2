@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { InventoryItem, Sale, MenuItem, ShoppingList } from '../types';
 import { useToast } from '../hooks/useToast';
@@ -98,7 +99,6 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({ isOpen, on
         let text = `🛒 *LISTA DE COMPRAS - LOCO ALITAS*\n_${new Date().toLocaleDateString()}_\n\n`;
         Object.entries(list).forEach(([category, items]) => {
             text += `*${category.toUpperCase()}*\n`;
-            // FIX: Cast 'items' to the correct type to resolve 'forEach' does not exist on 'unknown' error.
             (items as ShoppingListItemFromAI[]).forEach(item => {
                 text += `- ${item.name} (${item.suggestedQuantity})\n`;
             });
@@ -176,7 +176,6 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({ isOpen, on
                                     <div key={category}>
                                         <h3 className="text-lg font-bold text-blue-400 border-b-2 border-blue-800 pb-1 mb-2">{category}</h3>
                                         <ul className="space-y-2">
-                                            {/* FIX: Cast 'items' to the correct type to resolve 'map' does not exist on 'unknown' error. */}
                                             {(items as ShoppingListItemFromAI[]).map(item => (
                                                 <li key={item.name} className="p-3 bg-black/20 rounded-lg">
                                                     <div className="flex justify-between items-center">

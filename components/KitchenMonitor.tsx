@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Order, OrderStatus, Table, Sale, InventoryItem, PrinterSettings } from '../types';
+import type { Order, OrderStatus, Table, Sale, InventoryItem, PrinterSettings, Sede, OrderItem } from '../types';
 import { useToast } from '../hooks/useToast';
 import { generateKitchenPrediction, parseKitchenCommand } from '../services/geminiService';
 import { SparklesIcon, RefreshIcon, MicIcon, WaveIcon, SpinnerIcon, CheckCircleIcon } from './Icons';
@@ -12,6 +13,8 @@ interface KitchenMonitorProps {
     sales: Sale[];
     inventory: InventoryItem[];
     printerSettings: PrinterSettings;
+    sedes: Sede[];
+    selectedSedeId: string;
 }
 
 const OrderCard: React.FC<{ 
@@ -19,7 +22,9 @@ const OrderCard: React.FC<{
     tables: Table[]; 
     onReady: () => void;
     kitchenTimer: number; 
-}> = ({ order, tables, onReady, kitchenTimer }) => {
+    sedes: Sede[];
+    selectedSedeId: string;
+}> = ({ order, tables, onReady, kitchenTimer, sedes, selectedSedeId }) => {
     const [elapsedTime, setElapsedTime] = useState(0);
     const [remainingTime, setRemainingTime] = useState((kitchenTimer ?? 12) * 60);
 
@@ -85,12 +90,43 @@ const OrderCard: React.FC<{
 
 
     const getDestination = () => {
+        let destination = '';
         if (order.orderType === 'dine-in') {
             const table = tables.find(t => t.id === order.tableId);
-            return table ? table.name : 'Mesa ??';
+            destination = table ? table.name : 'Mesa ??';
+        } else if (order.orderType === 'delivery') {
+            destination = `🛵 ${order.deliveryInfo?.name?.split(' ')[0]}`;
+        } else {
+            destination = `🛍️ ${order.toGoName?.split(' ')[0]}`;
         }
-        if (order.orderType === 'delivery') return `🛵 ${order.deliveryInfo?.name?.split(' ')[0]}`;
-        return `🛍️ ${order.toGoName?.split(' ')[0]}`;
+    
+        if (selectedSedeId === 'global') {
+            const sedeName = sedes.find(s => s.id === order.sedeId)?.name || 'Sede ?';
+            destination = `[${sedeName}] ${destination}`;
+        }
+
+        if (order.isAdditionOrder) {
+            destination = `ADICIÓN: ${destination}`;
+        }
+        
+        return destination;
+    };
+    
+    const renderItems = (items: OrderItem[]) => {
+        return items.map(item => (
+            <div key={item.instanceId} className="p-2 rounded-lg">
+                <p className="font-bold text-lg leading-tight text-white">
+                    <span className="mr-1 text-amber-300">{item.quantity}x</span> {item.name}
+                </p>
+                <div className="pl-6 text-sm space-y-0.5 mt-1">
+                    {item.selectedChoice && <div className="text-gray-300">• {item.selectedChoice}</div>}
+                    {item.selectedWingSauces.length > 0 && <div className="text-red-300 font-semibold">• {item.selectedWingSauces.map(s => s.name).join(', ')}</div>}
+                    {item.selectedFrySauces.length > 0 && <div className="text-amber-300">• {item.selectedFrySauces.map(s => s.name).join(', ')}</div>}
+                    {item.selectedGelatoFlavors.length > 0 && <div className="text-sky-300">• {item.selectedGelatoFlavors.join(', ')}</div>}
+                    {item.notes && <div className="font-bold text-amber-200 bg-amber-900/30 p-1 rounded mt-1 text-xs uppercase">⚠️ {item.notes}</div>}
+                </div>
+            </div>
+        ));
     };
 
     return (
@@ -113,22 +149,7 @@ const OrderCard: React.FC<{
 
             {/* Cuerpo de la Comanda */}
             <div className="p-3 space-y-2 flex-1 overflow-y-auto bg-[#1a1a1a]">
-                {order.items.map(item => (
-                    <div key={item.instanceId} className={`p-2 rounded border-l-4 ${!item.isPrinted ? 'border-amber-500 bg-amber-900/10' : 'border-gray-600 bg-black/20'}`}>
-                        <div className="flex items-start justify-between">
-                            <p className="font-bold text-gray-100 text-lg leading-tight">
-                                <span className="text-[var(--accent-yellow)] mr-1">{item.quantity}x</span> {item.name}
-                            </p>
-                        </div>
-                        <div className="pl-6 text-sm space-y-0.5 mt-1">
-                            {item.selectedChoice && <div className="text-gray-400">• {item.selectedChoice}</div>}
-                            {item.selectedWingSauces.length > 0 && <div className="text-red-400 font-semibold">• {item.selectedWingSauces.map(s => s.name).join(', ')}</div>}
-                            {item.selectedFrySauces.length > 0 && <div className="text-amber-400">• {item.selectedFrySauces.map(s => s.name).join(', ')}</div>}
-                            {item.selectedGelatoFlavors.length > 0 && <div className="text-sky-400">• {item.selectedGelatoFlavors.join(', ')}</div>}
-                            {item.notes && <div className="font-bold text-amber-300 bg-amber-900/30 p-1 rounded mt-1 text-xs uppercase">⚠️ {item.notes}</div>}
-                        </div>
-                    </div>
-                ))}
+                {renderItems(order.items)}
             </div>
 
             {/* Pie de página con Tiempo Total y Botón */}
@@ -145,15 +166,30 @@ const OrderCard: React.FC<{
     );
 };
 
-export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOrderStatus, tables, sales, inventory, printerSettings }) => {
+export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOrderStatus, tables, sales, inventory, printerSettings, sedes, selectedSedeId }) => {
     const [aiPrediction, setAiPrediction] = useState('');
     const [isLoadingPrediction, setIsLoadingPrediction] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<any>(null);
     const { addToast } = useToast();
 
-    const activeOrders = useMemo(() => orders.filter(o => o.status === 'open').sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()), [orders]);
-    const recentCompletedOrders = useMemo(() => orders.filter(o => o.status === 'ready').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5), [orders]);
+    const activeOrders = useMemo(() => {
+        const filtered = selectedSedeId === 'global'
+            ? orders.filter(o => o.status === 'open')
+            : orders.filter(o => o.status === 'open' && o.sedeId === selectedSedeId);
+        
+        return filtered.sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }, [orders, selectedSedeId]);
+
+    const recentCompletedOrders = useMemo(() => {
+        const filtered = selectedSedeId === 'global'
+            ? orders.filter(o => o.status === 'ready')
+            : orders.filter(o => o.status === 'ready' && o.sedeId === selectedSedeId);
+            
+        return filtered
+            .sort((a,b) => new Date(b.readyAt || b.createdAt).getTime() - new Date(a.readyAt || a.createdAt).getTime())
+            .slice(0, 8);
+    }, [orders, selectedSedeId]);
 
     const previousOrdersCount = useRef(activeOrders.length);
 
@@ -176,11 +212,6 @@ export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOr
             setIsLoadingPrediction(false);
         }
     };
-
-    useEffect(() => {
-        // Cargar predicción inicial
-        // handleFetchPrediction(); // Descomentar si se quiere automático al inicio
-    }, []);
 
     const playAlertSound = () => {
         const sound = document.getElementById('kitchen-bell-sound') as HTMLAudioElement;
@@ -258,6 +289,8 @@ export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOr
                             tables={tables} 
                             onReady={() => updateOrderStatus(order.id, 'ready')}
                             kitchenTimer={printerSettings.kitchenTimer ?? 12}
+                            sedes={sedes}
+                            selectedSedeId={selectedSedeId}
                         />
                     ))}
                     {activeOrders.length === 0 && (
@@ -272,18 +305,25 @@ export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOr
 
             <div className="flex-none border-t border-gray-800 pt-4">
                 <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                    <RefreshIcon className="w-4 h-4"/> Historial Reciente
+                    <RefreshIcon className="w-4 h-4"/> Historial Reciente (Listos)
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                {recentCompletedOrders.map(order => (
-                    <div key={order.id} className="bg-gray-800/50 p-2 rounded-lg text-center border border-gray-700 hover:border-gray-500 transition-colors group">
-                        <p className="font-bold text-xs text-white truncate">{tables.find(t=>t.id === order.tableId)?.name || order.deliveryInfo?.name || order.toGoName}</p>
-                        <p className="text-[10px] text-gray-500 font-mono">#{order.id.slice(-4)}</p>
-                        <button onClick={() => updateOrderStatus(order.id, 'open')} className="mt-1 text-[10px] text-sky-500 hover:text-sky-300 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                            ↺ REABRIR
-                        </button>
-                    </div>
-                ))}
+                {recentCompletedOrders.map(order => {
+                    const sedeNamePrefix = selectedSedeId === 'global'
+                        ? `[${sedes.find(s => s.id === order.sedeId)?.name?.slice(0,3).toUpperCase()}] `
+                        : '';
+                    const destinationName = tables.find(t=>t.id === order.tableId)?.name || order.deliveryInfo?.name || order.toGoName;
+                    
+                    return (
+                        <div key={order.id} className="bg-gray-800/50 p-2 rounded-lg text-center border border-gray-700 hover:border-gray-500 transition-colors group">
+                            <p className="font-bold text-xs text-white truncate">{sedeNamePrefix}{destinationName}</p>
+                            <p className="text-[10px] text-gray-500 font-mono">#{order.id.slice(-4)}</p>
+                            <button onClick={() => updateOrderStatus(order.id, 'open')} className="mt-1 text-[10px] text-sky-500 hover:text-sky-300 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                ↺ REABRIR
+                            </button>
+                        </div>
+                    );
+                })}
                 </div>
             </div>
         </div>

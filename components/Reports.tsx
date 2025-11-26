@@ -1,24 +1,20 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
   LinearScale, 
   PointElement, 
   LineElement, 
-  BarElement, 
-  ArcElement, 
   Title, 
   Tooltip, 
   Legend, 
   Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import type { Sale, Table, Zone, PaymentMethod, User } from '../types';
+import { Line } from 'react-chartjs-2';
+import type { Sale } from '../types';
 import { formatPrice } from '../utils/formatPrice';
-import { SparklesIcon, DownloadIcon, EditIcon, TrashIcon, MotorcycleIcon, SpinnerIcon } from './Icons';
-// FIX: Remove unused ReportData import that was causing an error
-import { generateSalesReport, generateKitchenPerformanceReport } from '../services/geminiService';
 
 // 1. REGISTER CHART.JS COMPONENTS MANUALLY TO PREVENT CRASHES
 ChartJS.register(
@@ -26,8 +22,6 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
-  BarElement,
-  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -36,12 +30,6 @@ ChartJS.register(
 
 interface ReportsProps {
   sales: Sale[];
-  tables: Table[];
-  zones: Zone[];
-  users: User[];
-  currentUser: User;
-  deleteSale: (saleId: string) => void;
-  updateSale: (sale: Sale) => void;
 }
 
 // --- COMPONENTS FOR LAYOUT ---
@@ -54,7 +42,7 @@ const StatCard: React.FC<{ title: string; value: string; subtext?: string }> = (
     </div>
 );
 
-export const Reports: React.FC<ReportsProps> = ({ sales, tables, zones, users, currentUser, deleteSale, updateSale }) => {
+export const Reports: React.FC<ReportsProps> = ({ sales }) => {
     const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 

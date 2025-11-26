@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Order, PrinterSettings, Table, OrderItem } from '../types';
+import type { Order, PrinterSettings, Table } from '../types';
 import { formatPrice } from '../utils/formatPrice';
 
 interface ReceiptProps {
@@ -8,10 +8,10 @@ interface ReceiptProps {
     settings: PrinterSettings;
     type: 'customer' | 'kitchen';
     tables: Table[];
-    specificItems?: OrderItem[]; // Add ability to filter items
+    isAddition?: boolean;
 }
 
-export const Receipt: React.FC<ReceiptProps> = ({ order, settings, type, tables, specificItems }) => {
+export const Receipt: React.FC<ReceiptProps> = ({ order, settings, type, tables, isAddition }) => {
     
     const getDestination = () => {
         if (order.orderType === 'delivery') return `DELIVERY - ${order.deliveryInfo?.name}`;
@@ -20,15 +20,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, settings, type, tables,
         return `MESA: ${tableName || 'N/A'}`;
     }
 
-    // Determine width based on settings (58mm approx 200px, 80mm approx 300px in standard thermal printers)
-    // However, standard is to let CSS 'auto' width handle it or constrain container to 100%
-    // We use specific styles for legibility
-    
-    const itemsToRender = specificItems || order.items;
-    const isPartial = specificItems && specificItems.length < order.items.length;
-
-    // Calculate total of only rendered items if customer, or all if null (though customer receipt usually implies full)
-    // Usually kitchen partial doesn't show prices, so this is fine.
+    const itemsToRender = order.items;
     const total = itemsToRender.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
     return (
@@ -46,7 +38,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, settings, type, tables,
                 {type === 'kitchen' && (
                     <>
                         <h1 className="text-xl font-bold uppercase">COCINA</h1>
-                        {isPartial && <h2 className="text-sm font-bold uppercase border-2 border-black inline-block px-2 mt-1">** ADICION **</h2>}
+                        {isAddition && <h2 className="text-sm font-bold uppercase border-2 border-black inline-block px-2 mt-1">** ADICION **</h2>}
                     </>
                 )}
                 

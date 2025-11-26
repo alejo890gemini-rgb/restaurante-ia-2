@@ -1,8 +1,6 @@
-
-
 import React, { useEffect, useState } from 'react';
-import type { View, Permission, PrinterSettings } from '../types';
-import { DashboardIcon, POSIcon, MenuBookIcon, TableIcon, ReportsIcon, InventoryIcon, MotorcycleIcon, LockIcon, BookOpenIcon, DownloadIcon, UsersIcon, ShoppingCartIcon, AwardIcon, ClipboardCheckIcon, DollarSignIcon, MegaphoneIcon, RestauranteIAIcon } from './Icons';
+import type { View, Permission, PrinterSettings, Sede } from '../types';
+import { DashboardIcon, POSIcon, MenuBookIcon, TableIcon, ReportsIcon, InventoryIcon, MotorcycleIcon, LockIcon, BookOpenIcon, DownloadIcon, UsersIcon, ShoppingCartIcon, AwardIcon, ClipboardCheckIcon, DollarSignIcon, MegaphoneIcon, RestauranteIAIcon, QrCodeIcon, MapPinIcon } from './Icons';
 
 interface SidebarProps {
   currentView: View;
@@ -12,8 +10,12 @@ interface SidebarProps {
   onLogout: () => void;
   userName: string;
   roleName: string;
-  isOnline?: boolean; // New prop
-  settings?: PrinterSettings; // New prop for dynamic branding
+  isOnline?: boolean;
+  settings?: PrinterSettings;
+  isAdmin: boolean;
+  sedes: Sede[];
+  selectedSedeId: string;
+  setSelectedSedeId: (id: string) => void;
 }
 
 const NavItem: React.FC<{
@@ -44,7 +46,7 @@ const NavItem: React.FC<{
   </li>
 );
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, closeSidebar, permissions, onLogout, userName, roleName, isOnline = true, settings }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, closeSidebar, permissions, onLogout, userName, roleName, isOnline = true, settings, isAdmin, sedes, selectedSedeId, setSelectedSedeId }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
 
@@ -89,6 +91,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
             <span className="text-gray-500">{isOnline ? 'ON' : 'OFF'}</span>
         </div>
       </div>
+      
+      {isAdmin && (
+        <div className="p-2 border-b border-[var(--card-border)]">
+            <label className="text-xs text-gray-400 font-bold ml-2">Vista</label>
+            <select
+                value={selectedSedeId}
+                onChange={(e) => setSelectedSedeId(e.target.value)}
+                className="w-full mt-1 p-2 text-sm text-white bg-black/30 rounded-md border border-gray-600 focus:ring-1 focus:ring-purple-500 outline-none"
+            >
+                <option value="global" className="font-bold bg-gray-800">🌎 Visión Global (Todas)</option>
+                {sedes.map(sede => (
+                    <option key={sede.id} value={sede.id} className="bg-gray-800">{sede.name}</option>
+                ))}
+            </select>
+        </div>
+      )}
+
       <nav className="flex-1 p-4 overflow-y-auto">
         <ul>
           {hasPermission('VIEW_DASHBOARD') && (
@@ -199,6 +218,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
                     isActive={currentView === 'LOYALTY'}
                     onClick={() => handleNavClick('LOYALTY')}
                   />
+                  {hasPermission('MANAGE_QR') && (
+                    <NavItem
+                        icon={<QrCodeIcon />}
+                        label="Menú QR"
+                        isActive={currentView === 'QR_MANAGER'}
+                        onClick={() => handleNavClick('QR_MANAGER')}
+                    />
+                  )}
                  <NavItem
                     icon={<LockIcon />}
                     label="Configuración"

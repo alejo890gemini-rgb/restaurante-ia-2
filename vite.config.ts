@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    base: './', // Important for relative paths in production/Android
+    base: '/', // Important for relative paths in production/Android
     define: {
       // Inject variables into a single process.env object for robust access
       'process.env': {
@@ -28,6 +28,15 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: false,
       chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        input: {
+          // FIX: The `__dirname` variable is not available in ES modules, which Vite uses for its config file.
+          // Vite's `rollupOptions.input` automatically resolves paths relative to the project root, so we can
+          // provide the filenames directly. The `resolve` function from `path` is no longer needed.
+          main: 'index.html',
+          menu: 'menu.html',
+        },
+      },
     }
   }
 })

@@ -1,10 +1,10 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Customer, Sale, LoyaltySettings, LoyaltyTier } from '../types';
 import { UsersIcon, PlusIcon, EditIcon, TrashIcon, XIcon, SparklesIcon, SpinnerIcon, AwardIcon } from './Icons';
 import { useToast } from '../hooks/useToast';
 import { formatPrice } from '../utils/formatPrice';
-import { generateCustomerInsights, suggestLoyaltyReward } from '../services/geminiService';
+// FIX: Removed unused 'suggestLoyaltyReward' which is not exported from geminiService.
+import { generateCustomerInsights } from '../services/geminiService';
 
 interface ClientManagerProps {
     customers: Customer[];

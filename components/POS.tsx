@@ -1,17 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { MenuItem, Table, Order, OrderItem, MenuItemCategory, Sauce, OrderType, PaymentMethod, PrinterSettings, User, Zone, CategoryConfig, ParsedOrder } from '../types';
-import { MENU_CATEGORIES, SALSAS_ALITAS, SALSAS_PAPAS, SUBMENU_CHOICES, GELATO_FLAVORS } from '../constants';
+import { SALSAS_ALITAS, SALSAS_PAPAS, SUBMENU_CHOICES, GELATO_FLAVORS } from '../constants';
 // FIX: Add ZapIcon to imports for the new Quick Sale button
-import { EditIcon, TruckIcon, UserIcon, CheckCircleIcon, ShoppingBagIcon, SparklesIcon, PrinterIcon, XIcon, SpinnerIcon, TrashIcon, PlusIcon, CreditCardIcon, DollarSignIcon, ZapIcon } from './Icons';
+import { EditIcon, TruckIcon, UserIcon, CheckCircleIcon, ShoppingBagIcon, SparklesIcon, PrinterIcon, XIcon, SpinnerIcon, TrashIcon, PlusIcon, CreditCardIcon, DollarSignIcon, ZapIcon, MapPinIcon } from './Icons';
 import { CategoryIcon } from './CategoryIcon';
 import { formatPrice } from '../utils/formatPrice';
 import { parseWhatsAppOrder } from '../services/geminiService';
 import { useToast } from '../hooks/useToast';
-
-// Voice Icon Component
-const MicIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg className={className || "w-6 h-6"} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-);
 
 const ItemOptionsModal: React.FC<{
     item: OrderItem;
@@ -452,12 +447,12 @@ const OrderTicket: React.FC<{
                         <button onClick={clearOrder} className="bg-red-900/30 hover:bg-red-900/50 text-red-400 font-bold py-3 rounded-xl text-sm border border-red-900/50 transition-all">
                             Cancelar
                         </button>
-                        <button onClick={handleSaveOrder} className="bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 font-bold py-3 rounded-xl text-sm border border-blue-900/50 transition-all">
-                            Guardar (Cocina)
+                        <button onClick={handleCompleteSale} className="bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 font-bold py-3 rounded-xl text-sm border border-emerald-900/50 transition-all">
+                            Cobrar
                         </button>
                     </div>
-                    <button onClick={handleCompleteSale} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 rounded-xl text-lg shadow-lg shadow-emerald-900/40 transform transition-all hover:-translate-y-1">
-                        COBRAR
+                    <button onClick={handleSaveOrder} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-4 rounded-xl text-lg shadow-lg shadow-blue-900/40 transform transition-all hover:-translate-y-1">
+                        GUARDAR Y ENVIAR A COCINA
                     </button>
                 </div>
             )}
@@ -470,26 +465,27 @@ export const POS: React.FC<{
   tables: Table[];
   zones: Zone[];
   orders: Order[];
-  createOrder: (order: Order, showTicket?: boolean) => void;
+  createOrder: (order: Order) => void;
   completeSale: (order: Order, paymentMethod: PaymentMethod) => void;
   printerSettings: PrinterSettings;
   currentUser: User;
   initialTableId?: string | null;
   clearInitialTable: () => void;
   categoryConfigs: CategoryConfig[];
+  selectedSedeId: string;
 }> = (props) => {
-    const { menuItems, tables, zones, orders, createOrder, completeSale, printerSettings, currentUser, initialTableId, clearInitialTable, categoryConfigs } = props;
+    const { menuItems, tables, zones, orders, createOrder, completeSale, printerSettings, currentUser, initialTableId, clearInitialTable, categoryConfigs, selectedSedeId } = props;
     
     const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
     const [modal, setModal] = useState<'options' | 'customer' | 'table' | 'payment' | 'whatsapp' | null>(null);
     const [modalOrderType, setModalOrderType] = useState<'delivery' | 'to-go' | null>(null);
     const [itemForOptions, setItemForOptions] = useState<OrderItem | null>(null);
-    const [activeCategory, setActiveCategory] = useState<MenuItemCategory>(MENU_CATEGORIES[0]);
+    const [activeCategory, setActiveCategory] = useState<MenuItemCategory>(categoryConfigs[0]?.name);
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileOrderOpen, setIsMobileOrderOpen] = useState(false);
     const { addToast } = useToast();
 
-    const activeOrders = useMemo(() => orders.filter(o => o.status === 'open' || o.status === 'pending_confirmation'), [orders]);
+    const activeOrders = useMemo(() => orders.filter(o => o.status === 'open' || o.status === 'pending_confirmation' || o.status === 'ready'), [orders]);
     const openTableOrders = useMemo(() => activeOrders.filter(o => o.orderType === 'dine-in' && o.tableId), [activeOrders]);
 
     const getCategoryColor = (catName: string) => {
@@ -525,6 +521,10 @@ export const POS: React.FC<{
     };
 
     const loadOrderForTable = (tableId: string) => {
+        if (selectedSedeId === 'global') {
+            addToast('Selecciona una sede específica para operar mesas.', 'error');
+            return;
+        }
         const existingOrder = openTableOrders.find(o => o.tableId === tableId);
         if (existingOrder) {
             loadOrder(existingOrder);
@@ -536,7 +536,8 @@ export const POS: React.FC<{
                 items: [],
                 status: 'open',
                 createdAt: new Date().toISOString(),
-                userId: currentUser.id
+                userId: currentUser.id,
+                sedeId: selectedSedeId,
             });
         }
         setModal(null);
@@ -602,6 +603,10 @@ export const POS: React.FC<{
     };
 
     const handleCustomerInfoSave = (info: { name: string; phone: string; address?: string }) => {
+        if (selectedSedeId === 'global') {
+            addToast('Selecciona una sede específica para crear una orden.', 'error');
+            return;
+        }
         let newOrder: Order;
         const orderType = info.address ? 'delivery' : 'to-go';
         
@@ -613,7 +618,8 @@ export const POS: React.FC<{
                 status: 'pending_confirmation',
                 createdAt: new Date().toISOString(),
                 userId: currentUser.id,
-                deliveryInfo: { name: info.name, phone: info.phone, address: info.address || '', deliveryStatus: 'quoting' }
+                deliveryInfo: { name: info.name, phone: info.phone, address: info.address || '', deliveryStatus: 'quoting' },
+                sedeId: selectedSedeId,
             };
         } else { // to-go
             newOrder = {
@@ -624,7 +630,8 @@ export const POS: React.FC<{
                 createdAt: new Date().toISOString(),
                 userId: currentUser.id,
                 toGoName: info.name,
-                toGoPhone: info.phone
+                toGoPhone: info.phone,
+                sedeId: selectedSedeId,
             };
         }
         setCurrentOrder(newOrder);
@@ -641,7 +648,7 @@ export const POS: React.FC<{
 
     const handleCompleteSale = () => {
         if (currentOrder && currentOrder.items.length > 0) {
-            createOrder(currentOrder, false);
+            createOrder(currentOrder);
             setModal('payment');
         } else {
             addToast('Añade productos para cobrar la orden', 'error');
@@ -656,8 +663,11 @@ export const POS: React.FC<{
         }
     };
     
-    // FIX: Add function to handle Quick Sale button click
     const handleQuickSale = () => {
+        if (selectedSedeId === 'global') {
+            addToast('Selecciona una sede específica para crear una venta rápida.', 'error');
+            return;
+        }
         const quickSaleOrder: Order = {
             id: `ord-${Date.now()}`,
             orderType: 'to-go',
@@ -666,6 +676,7 @@ export const POS: React.FC<{
             createdAt: new Date().toISOString(),
             userId: currentUser.id,
             toGoName: 'Venta Rápida',
+            sedeId: selectedSedeId,
         };
         setCurrentOrder(quickSaleOrder);
         addToast('Iniciada venta rápida.', 'info');
@@ -781,6 +792,16 @@ export const POS: React.FC<{
     };
 
     if (!currentOrder) {
+        if (selectedSedeId === 'global') {
+            return (
+                <div className="h-full flex flex-col items-center justify-center text-center p-8 text-gray-500">
+                    <MapPinIcon className="w-16 h-16 mb-4"/>
+                    <h2 className="text-2xl font-bold text-white">Estás en Visión Global</h2>
+                    <p className="mt-2 max-w-sm">Para crear o gestionar órdenes, por favor selecciona una sede específica desde el menú lateral.</p>
+                </div>
+            );
+        }
+
         return (
             <div className="h-full flex flex-col p-4 md:p-8 animate-fadeIn overflow-y-auto">
                 {modal === 'table' && <TableSelectModal zones={zones} tables={tables} onClose={() => setModal(null)} onSelect={loadOrderForTable} />}
@@ -868,6 +889,8 @@ export const POS: React.FC<{
     
     const canImport = currentOrder?.orderType === 'delivery' || currentOrder?.orderType === 'to-go';
 
+    const menuCategories = categoryConfigs.map(c => c.name);
+
     return (
         <div className="h-full flex flex-col md:flex-row overflow-hidden bg-[#0f0f0f]">
             {modal === 'options' && itemForOptions && <ItemOptionsModal item={itemForOptions} onClose={() => setModal(null)} onSave={(item) => {
@@ -908,7 +931,7 @@ export const POS: React.FC<{
 
                 <div className="px-4 py-3 border-b border-[var(--card-border)] bg-black/20 overflow-x-auto custom-scrollbar">
                     <div className="flex space-x-3">
-                        {MENU_CATEGORIES.map(category => {
+                        {menuCategories.map(category => {
                             const color = getCategoryColor(category);
                             const isActive = activeCategory === category;
                             return (

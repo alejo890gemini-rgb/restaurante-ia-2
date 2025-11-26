@@ -1,26 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Robust environment variable retrieval for Vite/Netlify
-const getEnvVar = (key: string): string => {
-  // 1. Modern Vite (Production/Dev)
-  // @ts-ignore
-  if (import.meta.env && import.meta.env[key]) {
-    // @ts-ignore
-    return import.meta.env[key] as string;
-  }
-  // 2. Legacy/Fallback process.env
-  // @ts-ignore
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return '';
-};
+// Declare process for TypeScript
+declare const process: any;
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+// Use the same robust environment variable retrieval as other services
+const supabaseUrl = (typeof process !== 'undefined' && process.env && process.env.VITE_SUPABASE_URL) ? process.env.VITE_SUPABASE_URL : '';
+const supabaseAnonKey = (typeof process !== 'undefined' && process.env && process.env.VITE_SUPABASE_ANON_KEY) ? process.env.VITE_SUPABASE_ANON_KEY : '';
 
-// Validate keys to prevent crashes if variables are missing in Netlify dashboard
+
+// Validate keys to prevent crashes if variables are missing
 const isValidUrl = supabaseUrl && (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://'));
 const isValidKey = supabaseAnonKey && supabaseAnonKey.length > 0;
 
@@ -40,5 +28,5 @@ export const supabase: SupabaseClient | null = (isValidUrl && isValidKey)
   : null;
 
 if (!supabase) {
-  console.warn("⚠️ Supabase no inicializado. Verifique las Variables de Entorno en Netlify o .env");
+  console.warn("⚠️ Supabase no inicializado. Verifique las Variables de Entorno en Netlify o en su archivo .env (ej. VITE_SUPABASE_URL=...)");
 }

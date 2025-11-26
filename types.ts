@@ -1,10 +1,12 @@
 
 
+export interface Sede {
+  id: string;
+  name: string;
+  address: string;
+}
 
-
-
-
-export type View = 'DASHBOARD' | 'POS' | 'MENU' | 'TABLES' | 'REPORTS' | 'WHATSAPP' | 'INVENTORY' | 'DELIVERY_MANAGER' | 'SETTINGS' | 'MANUAL' | 'CLIENTS' | 'SHOPPING' | 'LOYALTY' | 'KITCHEN' | 'EXPENSES' | 'MARKETING' | 'QR_MANAGER';
+export type View = 'DASHBOARD' | 'POS' | 'MENU' | 'TABLES' | 'REPORTS' | 'WHATSAPP' | 'INVENTORY' | 'DELIVERY_MANAGER' | 'SETTINGS' | 'MANUAL' | 'CLIENTS' | 'SHOPPING' | 'LOYALTY' | 'KITCHEN' | 'EXPENSES' | 'MARKETING' | 'QR_MANAGER' | 'SEDES';
 
 // This is now a string to accommodate descriptive categories
 export type MenuItemCategory = string;
@@ -29,6 +31,7 @@ export interface InventoryItem {
   unit: InventoryUnit;
   cost: number; // Cost per unit
   alertThreshold: number;
+  sedeId: string;
 }
 
 export interface Ingredient {
@@ -49,6 +52,7 @@ export interface MenuItem {
   maxChoices?: number; // For limiting gelato flavor selections
   imageUrl?: string; // For AI-generated images
   recipe?: Ingredient[]; // For inventory tracking
+  sedeId: string | null; // null for master/global items
 }
 
 export type TableStatus = 'available' | 'occupied' | 'reserved' | 'cleaning';
@@ -56,6 +60,7 @@ export type TableStatus = 'available' | 'occupied' | 'reserved' | 'cleaning';
 export interface Zone {
     id: string;
     name: string;
+    sedeId: string;
 }
 
 export interface Table {
@@ -66,6 +71,7 @@ export interface Table {
   zoneId: string; // Linked to Zone id
   x?: number; // For table map view
   y?: number; // For table map view
+  sedeId: string;
 }
 
 export interface OrderItem extends MenuItem {
@@ -115,6 +121,8 @@ export interface Order {
   status: OrderStatus;
   createdAt: string;
   readyAt?: string; // Timestamp for when the order was marked as 'ready'
+  sedeId: string;
+  isAdditionOrder?: boolean; // New flag for kitchen monitor
 }
 
 export type PaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia';
@@ -125,6 +133,7 @@ export interface Sale {
   total: number;
   timestamp: string;
   paymentMethod: PaymentMethod;
+  sedeId: string;
 }
 
 export interface DeliveryRate {
@@ -133,6 +142,7 @@ export interface DeliveryRate {
     cost: number;
     averageTime: string;
     usageCount: number; // To learn which are most frequent
+    sedeId: string;
 }
 
 // --- LOYALTY SYSTEM TYPES ---
@@ -176,6 +186,7 @@ export interface Customer {
   // Loyalty Data
   loyaltyPoints?: number;
   loyaltyTierId?: string;
+  sedeId: string;
 }
 
 // --- NEW SHOPPING LIST TYPE ---
@@ -205,7 +216,8 @@ export type Permission =
   | 'MANAGE_EXPENSES'
   | 'MANAGE_MARKETING'
   | 'MANAGE_QR'
-  | 'MANAGE_SETTINGS';
+  | 'MANAGE_SETTINGS'
+  | 'MANAGE_SEDES';
 
 // --- NEWLY ADDED TYPES TO FIX ERRORS ---
 
@@ -215,6 +227,7 @@ export interface User {
   username: string;
   password?: string;
   roleId: string;
+  sedeId: string;
 }
 
 export interface Role {
@@ -254,6 +267,8 @@ export interface Expense {
   amount: number;
   category: string;
   date: string;
+  sedeId: string;
+  imageUrl?: string;
 }
 
 export type ExpenseCategory = string;
@@ -320,10 +335,6 @@ export interface MenuEngineeringItem {
     profit: number;
     classification: 'Star' | 'Plow-Horse' | 'Puzzle' | 'Dog';
     marginPercent: number;
-}
-
-export interface ReportData {
-    // Define structure based on usage if needed
 }
 
 // UI Types

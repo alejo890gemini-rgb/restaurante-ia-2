@@ -1,21 +1,24 @@
 
+
 import React from 'react';
 import type { Order, Table, PrinterSettings } from '../types';
 import { Receipt } from './Receipt';
 import { bluetoothPrinter } from '../services/printerService';
 
 interface KitchenTicketModalProps {
-  order: Order;
+  ticketData: { order: Order; isAddition: boolean; };
   onClose: () => void;
   tables: Table[];
   printerSettings: PrinterSettings;
 }
 
-export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({ order, onClose, tables, printerSettings }) => {
+export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({ ticketData, onClose, tables, printerSettings }) => {
+  const { order, isAddition } = ticketData;
+
   const handlePrint = async () => {
     if (bluetoothPrinter.isConnected()) {
         try {
-            await bluetoothPrinter.printOrder(order, printerSettings, 'kitchen', tables);
+            await bluetoothPrinter.printOrder(order, printerSettings, 'kitchen', tables, isAddition);
         } catch (e) {
             window.print(); // Fallback
         }
@@ -32,7 +35,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({ order, o
         <div className="p-4 bg-white text-black max-h-[70vh] overflow-y-auto">
             {/* This div is what becomes visible during print */}
             <div className="printable-content">
-                <Receipt order={order} settings={printerSettings} type="kitchen" tables={tables} />
+                <Receipt order={order} settings={printerSettings} type="kitchen" tables={tables} isAddition={isAddition} />
             </div>
         </div>
         <div className="p-4 flex justify-end gap-4 bg-[var(--card-bg)] rounded-b-lg no-print">

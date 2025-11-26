@@ -14,6 +14,7 @@ interface TableManagerProps {
   updateZone: (zone: Zone) => void;
   deleteZone: (zoneId: string) => Promise<boolean>;
   onOpenTableInPOS: (tableId: string) => void;
+  selectedSedeId: string;
 }
 
 const statusStyles: { [key in TableStatus]: { dot: string; text: string; bg: string; border: string } } = {
@@ -56,7 +57,8 @@ const TableFormModal: React.FC<{
             id: tableToEdit?.id || '', // id will be replaced for new items
             name,
             capacity: parseInt(capacity, 10) || 0,
-            zoneId: tableToEdit ? tableToEdit.zoneId : currentZoneId
+            zoneId: tableToEdit ? tableToEdit.zoneId : currentZoneId,
+            sedeId: tableToEdit ? tableToEdit.sedeId : '', // sedeId will be injected by parent
         });
         onClose();
     };
@@ -97,7 +99,8 @@ const ZoneFormModal: React.FC<{
         e.preventDefault();
         onSave({
             id: zoneToEdit?.id,
-            name
+            name,
+            sedeId: zoneToEdit?.sedeId || ''
         });
         onClose();
     }
@@ -167,7 +170,7 @@ const TableCard: React.FC<{
     );
 };
 
-export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTable, updateTable, deleteTable, updateTableStatus, addZone, updateZone, deleteZone, onOpenTableInPOS }) => {
+export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTable, updateTable, deleteTable, updateTableStatus, addZone, updateZone, deleteZone, onOpenTableInPOS, selectedSedeId }) => {
   const [view, setView] = useState<'grid' | 'map'>('grid');
   const [activeZoneId, setActiveZoneId] = useState<string>(zones[0]?.id || '');
   
@@ -179,7 +182,6 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
 
   const { addToast } = useToast();
   
-  // Drag and Drop state
   const [draggingTable, setDraggingTable] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
 
@@ -189,8 +191,6 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
       }
   }, [zones, activeZoneId]);
 
-  const tablesInZone = useMemo(() => tables.filter(t => t.zoneId === activeZoneId), [tables, activeZoneId]);
-
   const handleDragStart = (e: React.MouseEvent<HTMLDivElement>, tableId: string) => {
     e.preventDefault();
     setDraggingTable(tableId);
@@ -198,33 +198,23 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!draggingTable || !mapRef.current) return;
-    
     const mapBounds = mapRef.current.getBoundingClientRect();
     const x = e.clientX - mapBounds.left;
     const y = e.clientY - mapBounds.top;
-
-    const tableToUpdate = tables.find(t => t.id === draggingTable);
-    if (tableToUpdate) {
-        // We only update position here, not the full state, for performance
-        const tableElement = document.getElementById(`map-table-${draggingTable}`);
-        if(tableElement) {
-            tableElement.style.left = `${x}px`;
-            tableElement.style.top = `${y}px`;
-        }
+    const tableElement = document.getElementById(`map-table-${draggingTable}`);
+    if(tableElement) {
+        tableElement.style.left = `${x}px`;
+        tableElement.style.top = `${y}px`;
     }
   };
 
   const handleMouseUp = (e: MouseEvent) => {
     if (!draggingTable || !mapRef.current) return;
-    
     const mapBounds = mapRef.current.getBoundingClientRect();
     const x = e.clientX - mapBounds.left;
     const y = e.clientY - mapBounds.top;
-
     const tableToUpdate = tables.find(t => t.id === draggingTable);
-    if(tableToUpdate) {
-        updateTable({ ...tableToUpdate, x, y });
-    }
+    if(tableToUpdate) updateTable({ ...tableToUpdate, x, y });
     setDraggingTable(null);
   };
 
@@ -240,6 +230,10 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
   }, [draggingTable, view]);
   
   const openAddModal = () => {
+    if (selectedSedeId === 'global') {
+        addToast('Selecciona una sede para añadir mesas.', 'error');
+        return;
+    }
     setTableToEdit(null);
     setIsModalOpen(true);
   };
@@ -251,21 +245,20 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
 
   const handleSaveTable = (table: Omit<Table, 'status'>) => {
     if (tableToEdit) {
-      updateTable({ ...tableToEdit, name: table.name, capacity: table.capacity, zoneId: table.zoneId });
-      addToast('Mesa actualizada con éxito', 'success');
+      updateTable({ ...tableToEdit, name: table.name, capacity: table.capacity });
+      addToast('Mesa actualizada', 'success');
     } else {
       addTable(table);
-      addToast('Mesa añadida con éxito', 'success');
+      addToast('Mesa añadida', 'success');
     }
   };
 
-  const handleDeleteTable = (tableId: string) => {
-      if (window.confirm("¿Estás seguro de que quieres eliminar esta mesa?")) {
-          deleteTable(tableId);
-      }
-  };
-
+  const handleDeleteTable = (tableId: string) => { if (window.confirm("¿Eliminar esta mesa?")) deleteTable(tableId); };
   const openAddZoneModal = () => {
+      if (selectedSedeId === 'global') {
+        addToast('Selecciona una sede para añadir salones.', 'error');
+        return;
+      }
       setZoneToEdit(null);
       setIsZoneModalOpen(true);
   }
@@ -278,21 +271,18 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
 
   const handleDeleteZone = async (e: React.MouseEvent, zoneId: string) => {
       e.stopPropagation();
-      if(window.confirm("¿Estás seguro? Si hay mesas en este salón, no se podrá eliminar.")) {
-          const success = await deleteZone(zoneId);
-          if (success) {
-            addToast('Salón eliminado con éxito.', 'success');
-          }
+      if(window.confirm("¿Seguro? Si hay mesas en este salón, no se podrá eliminar.")) {
+          if(await deleteZone(zoneId)) addToast('Salón eliminado', 'success');
       }
   }
 
   const handleSaveZone = (zone: any) => {
       if (zone.id) {
         updateZone(zone);
-        addToast('Salón renombrado con éxito.', 'success');
+        addToast('Salón renombrado', 'success');
       } else {
         addZone(zone);
-        addToast('Salón creado con éxito.', 'success');
+        addToast('Salón creado', 'success');
       }
   }
 
@@ -304,13 +294,8 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-white">Gestión de Mesas</h2>
         <div className="flex items-center gap-4">
-            <div className="flex items-center bg-black/20 p-1 rounded-lg border border-[var(--card-border)]">
-                <button onClick={() => setView('grid')} className={`px-3 py-1 text-sm font-semibold rounded ${view === 'grid' ? 'bg-[var(--primary-red)] text-white' : 'text-gray-400'}`}>Grid</button>
-                <button onClick={() => setView('map')} className={`px-3 py-1 text-sm font-semibold rounded ${view === 'map' ? 'bg-[var(--primary-red)] text-white' : 'text-gray-400'}`}>Mapa</button>
-            </div>
-           <button onClick={openAddModal} className="flex items-center bg-[var(--primary-red)] text-white px-4 py-2 rounded-lg shadow hover:bg-[var(--dark-red)] transition-colors font-semibold">
-              <PlusIcon />
-              <span className="ml-2 hidden sm:inline">Añadir Mesa</span>
+            <button onClick={openAddModal} className="flex items-center bg-[var(--primary-red)] text-white px-4 py-2 rounded-lg shadow hover:bg-[var(--dark-red)] transition-colors font-semibold">
+              <PlusIcon /> <span className="ml-2 hidden sm:inline">Añadir Mesa</span>
             </button>
         </div>
       </div>
@@ -333,40 +318,13 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
           </button>
       </div>
       
-      {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {tablesInZone.map(table => (
+          {tables.map(table => (
             <TableCard key={table.id} table={table} onStatusChange={(s) => updateTableStatus(table.id, s)} onEdit={() => openEditModal(table)} onDelete={() => handleDeleteTable(table.id)} onOpenPOS={() => onOpenTableInPOS(table.id)} />
           ))}
         </div>
-      ) : (
-        <div ref={mapRef} className="relative w-full h-[60vh] bg-black/20 rounded-lg border-2 border-dashed border-gray-700 overflow-hidden">
-            {tablesInZone.map(table => {
-                const styles = statusStyles[table.status];
-                return (
-                    <div 
-                        key={table.id}
-                        id={`map-table-${table.id}`}
-                        onMouseDown={(e) => handleDragStart(e, table.id)}
-                        className={`absolute p-2 rounded-lg cursor-grab w-32 shadow-lg flex flex-col justify-between border-2 ${styles.border} ${draggingTable === table.id ? 'cursor-grabbing z-10 scale-105 shadow-2xl' : ''}`}
-                        style={{ left: table.x || 50, top: table.y || 50, backgroundColor: 'var(--card-bg)' }}
-                    >
-                        <div className="font-bold text-white text-sm">{table.name}</div>
-                        <div className="flex items-center justify-between mt-2">
-                             <div className={`flex items-center text-xs ${styles.text}`}>
-                                <span className={`w-2 h-2 rounded-full mr-1.5 ${styles.dot}`}></span>
-                                {statusText[table.status]}
-                            </div>
-                            <button onClick={() => onOpenTableInPOS(table.id)} className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:bg-white/20">
-                                {table.status === 'occupied' ? 'Ver' : 'Abrir'}
-                            </button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-      )}
-      {tablesInZone.length === 0 && <p className="text-center py-10 text-gray-500">No hay mesas en este salón.</p>}
+
+      {tables.length === 0 && <p className="text-center py-10 text-gray-500">No hay mesas en esta sede.</p>}
 
     </div>
   );

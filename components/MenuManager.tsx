@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import type { MenuItem, MenuItemCategory, Ingredient, InventoryItem, CategoryConfig } from '../types';
 import { PlusIcon, TrashIcon, EditIcon, SparklesIcon, XIcon, SpinnerIcon, SettingsIcon } from './Icons';
-import { generateMenuDescription, generateImageForDish, analyzeDishPricing } from '../services/geminiService';
-import { MENU_CATEGORIES, CATEGORY_PALETTE } from '../constants';
+import { generateMenuDescription, analyzeDishPricing } from '../services/geminiService';
+import { CATEGORY_PALETTE } from '../constants';
 import { CategoryIcon } from './CategoryIcon';
 import { formatPrice } from '../utils/formatPrice';
 import { useToast } from '../hooks/useToast';
@@ -15,6 +15,7 @@ interface MenuManagerProps {
   inventoryItems: InventoryItem[];
   categoryConfigs: CategoryConfig[];
   updateCategoryConfigs: (configs: CategoryConfig[]) => void;
+  selectedSedeId: string;
 }
 
 const CategoryColorModal: React.FC<{
@@ -26,7 +27,6 @@ const CategoryColorModal: React.FC<{
 }> = ({ isOpen, onClose, configs, onSave, existingCategories }) => {
     const [localConfigs, setLocalConfigs] = useState<CategoryConfig[]>(configs);
     
-    // Ensure all existing categories are in localConfigs
     React.useEffect(() => {
         const merged = [...configs];
         existingCategories.forEach(cat => {
@@ -88,7 +88,9 @@ const MenuItemFormModal: React.FC<{
     onSave: (item: any) => void;
     itemToEdit: MenuItem | null;
     inventoryItems: InventoryItem[];
-}> = ({ isOpen, onClose, onSave, itemToEdit, inventoryItems }) => {
+    categoryConfigs: CategoryConfig[];
+    selectedSedeId: string;
+}> = ({ isOpen, onClose, onSave, itemToEdit, inventoryItems, categoryConfigs, selectedSedeId }) => {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [price, setPrice] = useState('');
@@ -100,9 +102,9 @@ const MenuItemFormModal: React.FC<{
     const [imageUrl, setImageUrl] = useState<string | undefined>('');
     const [recipe, setRecipe] = useState<Ingredient[]>([]);
     const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
-    const [isGeneratingImg, setIsGeneratingImg] = useState(false);
     const [isAnalyzingPrice, setIsAnalyzingPrice] = useState(false);
     const [pricingAdvice, setPricingAdvice] = useState('');
+    const [isGlobalItem, setIsGlobalItem] = useState(true);
     const { addToast } = useToast();
 
     // Recipe state
@@ -122,19 +124,21 @@ const MenuItemFormModal: React.FC<{
             setMaxChoices(itemToEdit.maxChoices?.toString() || '');
             setImageUrl(itemToEdit.imageUrl || '');
             setRecipe(itemToEdit.recipe || []);
+            setIsGlobalItem(itemToEdit.sedeId === null);
         } else {
             setName('');
             setDescription('');
             setPrice('');
-            setCategory(MENU_CATEGORIES[0] || 'Other');
+            setCategory(categoryConfigs[0]?.name || 'Other');
             setHasWings(false);
             setHasFries(false);
             setSubmenuKey('');
             setMaxChoices('');
             setImageUrl('');
             setRecipe([]);
+            setIsGlobalItem(selectedSedeId === 'global');
         }
-    }, [itemToEdit, isOpen]);
+    }, [itemToEdit, isOpen, categoryConfigs, selectedSedeId]);
     
     const handleAddIngredientToRecipe = () => {
         if (!selectedIngredient || !ingredientQuantity) {
@@ -170,30 +174,10 @@ const MenuItemFormModal: React.FC<{
             setIsGeneratingDesc(false);
         }
     };
-
-    const handleGenerateImage = async () => {
-        if (!name || !description) {
-            addToast('El nombre y la descripción son necesarios para generar la imagen.', 'error');
-            return;
-        };
-        setIsGeneratingImg(true);
-        try {
-            const generatedUrl = await generateImageForDish(name, description);
-            setImageUrl(generatedUrl);
-        } catch (error) {
-            addToast('Error al generar la imagen.', 'error');
-            console.error("Failed to generate image", error);
-        } finally {
-            setIsGeneratingImg(false);
-        }
-    };
     
-    // Profit Calculation
     const totalCost = recipe.reduce((sum, ingredient) => {
         const invItem = inventoryItems.find(i => i.id === ingredient.inventoryItemId);
         if (!invItem) return sum;
-        // Determine cost per unit based on ingredient quantity vs inventory unit is simplified here
-        // Assuming recipe quantity matches inventory unit for simplicity or user conversion
         return sum + (invItem.cost * ingredient.quantity);
     }, 0);
 
@@ -206,10 +190,7 @@ const MenuItemFormModal: React.FC<{
             return;
         }
         setIsAnalyzingPrice(true);
-        const ingredientNames = recipe.map(r => {
-            const i = inventoryItems.find(inv => inv.id === r.inventoryItemId);
-            return i ? i.name : 'Unknown';
-        });
+        const ingredientNames = recipe.map(r => inventoryItems.find(inv => inv.id === r.inventoryItemId)?.name || 'Unknown');
 
         try {
             const advice = await analyzeDishPricing(name, currentPrice, totalCost, ingredientNames);
@@ -225,16 +206,13 @@ const MenuItemFormModal: React.FC<{
         e.preventDefault();
         onSave({ 
             id: itemToEdit?.id,
-            name, 
-            description, 
+            name, description, 
             price: parseFloat(price), 
-            category,
-            hasWings,
-            hasFries,
+            category, hasWings, hasFries,
             submenuKey: submenuKey || undefined,
             maxChoices: maxChoices ? parseInt(maxChoices, 10) : undefined,
-            imageUrl,
-            recipe,
+            imageUrl, recipe,
+            sedeId: isGlobalItem ? null : selectedSedeId,
         });
         onClose();
     };
@@ -249,9 +227,9 @@ const MenuItemFormModal: React.FC<{
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Left Column: Dish Info */}
                         <div className="space-y-4">
-                            {imageUrl || isGeneratingImg ? (
+                            {imageUrl ? (
                                 <div className="w-full h-40 bg-black/20 rounded-lg mb-4 flex items-center justify-center overflow-hidden border border-[var(--card-border)]">
-                                    {isGeneratingImg ? <span className="text-gray-400">Generando imagen...</span> : <img src={imageUrl} alt={name} className="w-full h-full object-cover" />}
+                                    <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
                                 </div>
                             ) : null}
 
@@ -263,12 +241,7 @@ const MenuItemFormModal: React.FC<{
                                   <span className="ml-1">{isGeneratingDesc ? '...' : 'AI'}</span>
                                 </button>
                             </div>
-                            <button type="button" onClick={handleGenerateImage} disabled={isGeneratingImg || !name || !description} className="w-full flex items-center justify-center gap-2 bg-sky-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <SparklesIcon />
-                                <span>{isGeneratingImg ? 'Generando Imagen...' : 'Generar Imagen con IA'}</span>
-                            </button>
                             
-                            {/* Price Analysis Section */}
                             <div className="space-y-2 p-3 rounded-lg bg-black/20 border border-[var(--card-border)]">
                                 <div className="flex items-center gap-2">
                                     <input type="number" placeholder="Precio" value={price} onChange={e => setPrice(e.target.value)} required min="0" step="0.01" className="flex-1 p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
@@ -280,25 +253,16 @@ const MenuItemFormModal: React.FC<{
                                     <div className="text-gray-400">Costo: <span className="text-white font-mono">{formatPrice(totalCost)}</span></div>
                                     <div className="text-gray-400">Margen: <span className={`font-mono font-bold ${margin < 50 ? 'text-red-500' : 'text-emerald-500'}`}>{margin.toFixed(1)}%</span></div>
                                 </div>
-                                {pricingAdvice && (
-                                    <div className="text-xs text-emerald-200 bg-emerald-900/30 p-2 rounded border border-emerald-500/30 mt-2">
-                                        <strong>LocoBot:</strong> {pricingAdvice}
-                                    </div>
-                                )}
+                                {pricingAdvice && <p className="text-xs text-emerald-200 bg-emerald-900/30 p-2 rounded border border-emerald-500/30 mt-2"><strong>LocoBot:</strong> {pricingAdvice}</p>}
                             </div>
 
                             <input type="text" placeholder="Categoría" value={category} onChange={e => setCategory(e.target.value)} required className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
-                            
-                            {category === '🍨 LOCOGELATOS ARTESANALES' && (
-                                <input type="number" placeholder="Máx. Opciones (Gelato)" value={maxChoices} onChange={e => setMaxChoices(e.target.value)} min="0" step="1" className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
+                             {selectedSedeId !== 'global' && (
+                                <div className="bg-black/20 p-2 rounded-lg border border-gray-700 flex">
+                                    <button type="button" onClick={() => setIsGlobalItem(true)} className={`flex-1 text-xs font-bold py-1 rounded ${isGlobalItem ? 'bg-purple-600 text-white' : 'text-gray-300'}`}>Platillo Maestro (Global)</button>
+                                    <button type="button" onClick={() => setIsGlobalItem(false)} className={`flex-1 text-xs font-bold py-1 rounded ${!isGlobalItem ? 'bg-purple-600 text-white' : 'text-gray-300'}`}>Exclusivo de esta Sede</button>
+                                </div>
                             )}
-                            
-                            <input type="text" placeholder="Clave de Submenú (ej. jugos_naturales)" value={submenuKey} onChange={e => setSubmenuKey(e.target.value)} className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
-
-                            <div className="flex space-x-6 pt-2">
-                                <label className="flex items-center"><input type="checkbox" checked={hasWings} onChange={e => setHasWings(e.target.checked)} className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-[var(--primary-red)] focus:ring-[var(--primary-red)]"/><span className="ml-2 text-sm text-gray-300">Incluye Alitas</span></label>
-                                <label className="flex items-center"><input type="checkbox" checked={hasFries} onChange={e => setHasFries(e.target.checked)} className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-[var(--primary-red)] focus:ring-[var(--primary-red)]"/><span className="ml-2 text-sm text-gray-300">Incluye Papas</span></label>
-                            </div>
                         </div>
 
                         {/* Right Column: Recipe Manager */}
@@ -345,7 +309,7 @@ const MenuItemFormModal: React.FC<{
 };
 
 
-export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem, updateMenuItem, deleteMenuItem, inventoryItems, categoryConfigs, updateCategoryConfigs }) => {
+export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem, updateMenuItem, deleteMenuItem, inventoryItems, categoryConfigs, updateCategoryConfigs, selectedSedeId }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<MenuItem | null>(null);
@@ -397,10 +361,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem
     }
   };
   
-  const getCategoryColor = (catName: string) => {
-      const config = categoryConfigs.find(c => c.name === catName);
-      return config ? config.color : '#6B7280';
-  }
+  const getCategoryColor = (catName: string) => categoryConfigs.find(c => c.name === catName)?.color || '#6B7280';
 
 
   return (
@@ -427,7 +388,7 @@ export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem
                 <h3 className="text-2xl font-semibold mb-4 text-white flex items-center gap-3">
                   <span className="p-2 rounded-full shadow-md" style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}40` }}>
                        <CategoryIcon category={category} className="w-5 h-5 text-white"/>
-                  </span>
+                   </span>
                   <span className="border-b-2 pb-1" style={{ borderColor: color }}>{category}</span>
                 </h3>
                 <div className="bg-[var(--card-bg)] rounded-xl shadow-lg border border-[var(--card-border)]">
@@ -446,34 +407,11 @@ export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem
                                         <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div className="w-12 h-12 rounded-md mr-4 flex items-center justify-center bg-black/20 flex-shrink-0 overflow-hidden border border-[var(--card-border)]">
-                                                    {item.imageUrl ? (
-                                                        <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <CategoryIcon category={item.category} className="w-7 h-7 text-gray-500" />
-                                                    )}
+                                                    {item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" /> : <CategoryIcon category={item.category} className="w-7 h-7 text-gray-500" />}
                                                 </div>
                                                 <div>
-                                                    <div className="text-base font-semibold">{item.name}</div>
-                                                    {item.description ? (
-                                                      <div className="font-normal text-gray-500 text-xs max-w-xs truncate hidden sm:block">{item.description}</div>
-                                                    ) : (
-                                                      <div className="hidden sm:block mt-1">
-                                                          {generatingDescId === item.id ? (
-                                                              <div className="flex items-center gap-2 text-xs text-purple-400">
-                                                                  <SpinnerIcon className="w-4 h-4 animate-spin"/>
-                                                                  <span>Generando...</span>
-                                                              </div>
-                                                          ) : (
-                                                              <button 
-                                                                  onClick={() => handleGenerateDescriptionForRow(item)}
-                                                                  className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 font-semibold bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
-                                                              >
-                                                                  <SparklesIcon className="w-4 h-4" />
-                                                                  <span>Generar con IA</span>
-                                                              </button>
-                                                          )}
-                                                      </div>
-                                                    )}
+                                                    <div className="text-base font-semibold">{item.name} {item.sedeId === null && <span className="text-xs text-purple-400 font-normal">(Maestro)</span>}</div>
+                                                    <div className="font-normal text-gray-500 text-xs max-w-xs truncate hidden sm:block">{item.description}</div>
                                                 </div>
                                             </div>
                                         </th>
@@ -499,6 +437,8 @@ export const MenuManager: React.FC<MenuManagerProps> = ({ menuItems, addMenuItem
         onSave={handleSave}
         itemToEdit={itemToEdit}
         inventoryItems={inventoryItems}
+        categoryConfigs={categoryConfigs}
+        selectedSedeId={selectedSedeId}
       />
       
       <CategoryColorModal

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { PaymentMethod, MenuItem, Table, Sale, InventoryItem, Order, User, InventoryUnit, Customer, ShoppingListItem, LoyaltyReward, ProfeLocoActionResponse, ProfeLocoAction, View, ExpenseCategory, ParsedOrder, ParsedOrderItem, ParsedCustomerInfo, MenuEngineeringItem, ParsedVoiceCommand, ReportData, ParsedInventoryCommand, ShoppingList, ProfeLocoResponse } from '../types';
+import type { PaymentMethod, MenuItem, Table, Sale, InventoryItem, Order, User, InventoryUnit, Customer, ShoppingListItem, ProfeLocoActionResponse, ProfeLocoAction, View, ExpenseCategory, ParsedOrder, ParsedOrderItem, ParsedCustomerInfo, ParsedInventoryCommand, ShoppingList, ProfeLocoResponse } from '../types';
 import { formatPrice } from "../utils/formatPrice";
 import { SALSAS_ALITAS, SALSAS_PAPAS } from "../constants";
 
@@ -92,9 +92,10 @@ Tu misión es ayudar al usuario a gestionar su negocio usando IA.
 
 ## 🏢 NUEVA ARQUITECTURA: MULTI-SEDE (Multi-Branch)
 El sistema ahora soporta múltiples locales. Es vital que entiendas esto:
-- **Sedes Independientes:** Cada local tiene su propia contabilidad, inventario y ventas. Los empleados de una sede NO ven datos de otra.
-- **Super Admin (Dueño):** Tiene "Visión de Dios". En el Dashboard, puede ver un resumen global de ventas o filtrar por una sede específica.
+- **Sedes Independientes:** Cada local (sede) tiene su propia contabilidad, inventario y ventas. Los empleados de una sede NO ven datos de otra.
+- **Super Admin (Dueño):** Tiene una "Visión Global". Desde el selector de sedes en la barra lateral, puede ver un resumen de todas las ventas sumadas ("Visión Global") o filtrar para ver una sede específica.
 - **Gestión:** Se crean nuevas sedes en "Configuración > Sedes". Los usuarios se asignan a una sede al crearlos.
+- **Menús:** Los productos pueden ser "Maestros" (disponibles en todas las sedes) o "Exclusivos" de una sola sede.
 
 ## 🚀 TUS SUPERPODERES (ACCIONES DIRECTAS)
 Puedes ejecutar estas acciones si el usuario te lo pide (por voz o texto):
@@ -303,15 +304,6 @@ export const generateMenuDescription = async (dishName: string): Promise<string>
     } catch (e) { return "Error al generar."; }
 };
 
-export const generateImageForDish = async (dishName: string, dishDescription: string): Promise<string> => {
-    const ai = getAiClient();
-    if (!ai) return "";
-    // Placeholder logic - Gemini text models don't generate images directly like this without specific tools or imagen models. 
-    // We'll assume this feature is intended to be text-to-image or we return a placeholder for now to avoid errors.
-    // For a real implementation, you would use an Imagen model here.
-    return ""; 
-};
-
 export const analyzeDishPricing = async (dishName: string, currentPrice: number, totalCost: number, ingredients: string[]): Promise<string> => {
     const ai = getAiClient();
     if (!ai) return "Requiere API Key.";
@@ -396,10 +388,7 @@ export const generateMarketingMessage = async (segment: string, offer: string): 
 };
 
 // Fallback exports for other functions to prevent crashes, updated to use getAiClient
-export const generateSalesReport = async (data: any): Promise<string> => { return "Reporte generado por IA (Simulado)" };
-export const generateKitchenPerformanceReport = async (data: any): Promise<string> => { return "Reporte de rendimiento (Simulado)" };
 export const generateDeliveryMetadata = async (address: string): Promise<any> => { return { normalizedAddress: address, mapsLink: '' } };
-export const parseVoiceCommand = async (transcription: string, context: any): Promise<any | null> => { return null };
 export const parseKitchenCommand = async (transcript: string, activeOrders: any[]): Promise<any> => { 
     const ai = getAiClient();
     if (!ai) return { action: 'unknown', message: 'Sin API Key' };
@@ -437,8 +426,6 @@ export const generateCustomerInsights = async (customerName: string, customerHis
         return JSON.parse(res.text || '{}');
     } catch(e) { return null; }
 };
-
-export const suggestLoyaltyReward = async ( purchaseHistory: any[], availableRewards: any[] ): Promise<any | null> => { return null };
 
 export const generateShoppingList = async (inventory: InventoryItem[], sales: Sale[], menu: MenuItem[]): Promise<ShoppingList | null> => {
     const ai = getAiClient();
@@ -579,64 +566,3 @@ export const analyzeInventoryRisk = async (inventory: any[]): Promise<string> =>
         return res.text || "";
     } catch(e) { return "Error."; }
 };
-
-export const analyzeMenuEngineering = async (items: MenuEngineeringItem[]): Promise<string[]> => {
-    const ai = getAiClient();
-    if (!ai) return ["Configura la API Key para ver recomendaciones."];
-
-    // Simplified context to save tokens
-    const context = items.map(i => `${i.name}: ${i.classification} (Mg: ${i.marginPercent.toFixed(0)}%, Pop: ${i.popularity.toFixed(0)}%)`).join('\n');
-
-    const prompt = `
-        Actúa como consultor de restaurantes. Analiza esta Matriz de Ingeniería de Menú (Boston Matrix):
-        ${context}
-
-        Genera 3 recomendaciones estratégicas MUY CONCRETAS y cortas (max 15 palabras c/u).
-        Enfócate en qué hacer con los platos 'Estrella', 'Vaca Lechera', 'Incógnita' o 'Perro'.
-        
-        Output JSON: { "recommendations": ["rec1", "rec2", "rec3"] }
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const json = JSON.parse(response.text || '{}');
-        return json.recommendations || ["Revisar costos.", "Promocionar platos rentables."];
-    } catch (e) { return ["Error al analizar."]; }
-};
-
-export const getPublicMenuAdvice = async (userMessage: string, menuItems: MenuItem[]): Promise<string> => {
-    const ai = getAiClient();
-    if (!ai) return "¡Hola! No puedo responder ahora mismo, pero puedes ver el menú completo arriba. 😊";
-
-    const menuContext = menuItems.map(i => `${i.name}: ${formatPrice(i.price)} (${i.description})`).join('\n');
-    
-    const prompt = `
-        Eres un mesero virtual amable y experto del restaurante "Restaurante IA Pro".
-        
-        MENÚ DISPONIBLE:
-        ${menuContext}
-        
-        PREGUNTA DEL CLIENTE: "${userMessage}"
-        
-        Tu tarea:
-        1. Responder la duda del cliente.
-        2. Recomendar platos específicos del menú basándote en su pregunta.
-        3. Ser breve (max 40 palabras), simpático y usar emojis.
-        
-        Si preguntan algo fuera del menú, redirígelos amablemente a nuestros platos.
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        return response.text?.trim() || "¡Claro! Revisa nuestras hamburguesas y alitas, ¡son deliciosas! 🍔🍗";
-    } catch (e) { return "Lo siento, tuve un pequeño problema técnico. ¡Pero nuestras alitas siguen siendo ricas!"; }
-};
-
-// FIX: Removed duplicate interface declaration. This type is now correctly imported from '../types'.

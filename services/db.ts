@@ -1,18 +1,37 @@
-
 import { supabase } from './supabaseClient';
-import type { User } from '../types';
+import type { User, Sede } from '../types';
 import { 
     INITIAL_USERS, 
     INITIAL_ROLES, 
-    INITIAL_MENU_ITEMS, 
+    BASE_MENU_ITEMS, 
     INITIAL_TABLES, 
     INITIAL_ZONES, 
     INITIAL_INVENTORY_ITEMS,
     INITIAL_PRINTER_SETTINGS,
     INITIAL_CATEGORY_CONFIG,
     INITIAL_LOYALTY_SETTINGS,
-    EXPENSE_CATEGORIES
+    EXPENSE_CATEGORIES,
+    INITIAL_SEDES
 } from '../constants';
+import { generateId } from '../utils/generateId';
+
+// --- OFFLINE HELPER FUNCTIONS ---
+const saveLocal = (key: string, data: any) => {
+    try {
+        localStorage.setItem(`loco_offline_${key}`, JSON.stringify(data));
+    } catch (e) {
+        console.error("Error saving to local storage", e);
+    }
+};
+
+// FIX: Changed fallback type from `any[]` to `any` to allow both arrays and objects as fallbacks.
+const loadLocal = (key: string, fallback: any = []) => {
+    try {
+        const stored = localStorage.getItem(`loco_offline_${key}`);
+        return stored ? JSON.parse(stored) : fallback;
+    } catch { return fallback; }
+};
+
 
 // Helper to unwrap the 'data' column from the table structure
 const unwrap = (rows: any[]) => {
@@ -47,7 +66,12 @@ export const db = {
     
     // Simple insert
     insert: async (table: string, item: any) => {
-        if (!supabase) return;
+        if (!supabase) {
+            const currentData = loadLocal(table);
+            const newData = [...currentData, item];
+            saveLocal(table, newData);
+            return;
+        }
         const payload = { data: item };
         if (item.id) {
             payload['id'] = item.id;
@@ -58,15 +82,50 @@ export const db = {
 
     // Insert or Update
     upsert: async (table: string, item: { id: string } & any) => {
-        if (!supabase) return;
+        if (!supabase) {
+            const currentData = loadLocal(table);
+            const itemIndex = currentData.findIndex((i: any) => i.id === item.id);
+            if (itemIndex > -1) {
+                currentData[itemIndex] = item;
+            } else {
+                currentData.push(item);
+            }
+            saveLocal(table, currentData);
+            return;
+        }
         const payload = { id: item.id, data: item };
         const { error } = await supabase.from(table).upsert(payload);
         if (error) console.error(`Error upserting to ${table}:`, error);
     },
 
+    // Bulk Insert or Update
+    bulkUpsert: async (table: string, items: ({ id: string } & any)[]) => {
+        if (!supabase) {
+            const currentData = loadLocal(table, []);
+            items.forEach(item => {
+                const itemIndex = currentData.findIndex((i: any) => i.id === item.id);
+                if (itemIndex > -1) {
+                    currentData[itemIndex] = item;
+                } else {
+                    currentData.push(item);
+                }
+            });
+            saveLocal(table, currentData);
+            return;
+        }
+        const payload = items.map(item => ({ id: item.id, data: item }));
+        const { error } = await supabase.from(table).upsert(payload);
+        if (error) console.error(`Error bulk upserting to ${table}:`, error);
+    },
+
     // Delete
     delete: async (table: string, id: string) => {
-        if (!supabase) return;
+        if (!supabase) {
+            const currentData = loadLocal(table);
+            const newData = currentData.filter((i: any) => i.id !== id);
+            saveLocal(table, newData);
+            return;
+        }
         const { error } = await supabase.from(table).delete().eq('id', id);
         if (error) console.error(`Error deleting from ${table}:`, error);
     },
@@ -116,79 +175,65 @@ export const db = {
     // --- SPECIFIC FUNCTIONS ---
 
     fetchAllTables: async () => {
+        const tablesToFetch = ['users', 'roles', 'menu_items', 'tables', 'zones', 'inventory', 'orders', 'sales', 'customers', 'expenses', 'delivery_rates', 'sedes'];
+        
         // OFFLINE MODE FALLBACK
         if (!supabase) {
              console.warn("Modo Offline: Cargando datos locales.");
-             const loadLocal = (key: string, fallback: any) => {
-                 try {
-                     const stored = localStorage.getItem(`loco_offline_${key}`);
-                     return stored ? JSON.parse(stored) : fallback;
-                 } catch { return fallback; }
+             
+             const data: Record<string, any> = {};
+             tablesToFetch.forEach(table => {
+                let fallback = [];
+                if (table === 'users') fallback = INITIAL_USERS;
+                if (table === 'roles') fallback = INITIAL_ROLES;
+                if (table === 'sedes') fallback = INITIAL_SEDES;
+                if (table === 'menu_items') fallback = BASE_MENU_ITEMS;
+                data[table] = loadLocal(table, fallback);
+             });
+
+             data.settings = {
+                 printer_settings: loadLocal('printer_settings', INITIAL_PRINTER_SETTINGS),
+                 category_configs: loadLocal('category_configs', INITIAL_CATEGORY_CONFIG),
+                 loyalty_settings: loadLocal('loyalty_settings', INITIAL_LOYALTY_SETTINGS),
+                 expense_categories: loadLocal('expense_categories', EXPENSE_CATEGORIES)
              };
 
-             return { 
-                 users: loadLocal('users', INITIAL_USERS), 
-                 roles: loadLocal('roles', INITIAL_ROLES), 
-                 menu_items: loadLocal('menu_items', INITIAL_MENU_ITEMS), 
-                 tables: loadLocal('tables', INITIAL_TABLES), 
-                 zones: loadLocal('zones', INITIAL_ZONES), 
-                 inventory: loadLocal('inventory', INITIAL_INVENTORY_ITEMS), 
-                 orders: loadLocal('orders', []), 
-                 sales: loadLocal('sales', []), 
-                 customers: loadLocal('customers', []), 
-                 expenses: loadLocal('expenses', []), 
-                 delivery_rates: loadLocal('delivery_rates', []), 
-                 settings: {
-                     printer_settings: loadLocal('printer_settings', INITIAL_PRINTER_SETTINGS),
-                     category_configs: loadLocal('category_configs', INITIAL_CATEGORY_CONFIG),
-                     loyalty_settings: loadLocal('loyalty_settings', INITIAL_LOYALTY_SETTINGS),
-                     expense_categories: loadLocal('expense_categories', EXPENSE_CATEGORIES)
-                 } 
-            };
+             return data;
         }
 
         // ONLINE FETCH
-        const [
-            users, roles, menu_items, tables, zones, inventory, orders, sales, customers, expenses, delivery_rates
-        ] = await Promise.all([
-            db.getAll('users'),
-            db.getAll('roles'),
-            db.getAll('menu_items'),
-            db.getAll('tables'),
-            db.getAll('zones'),
-            db.getAll('inventory'),
-            db.getAll('orders'),
-            db.getAll('sales'),
-            db.getAll('customers'),
-            db.getAll('expenses'),
-            db.getAll('delivery_rates')
-        ]);
+        const promises = tablesToFetch.map(table => db.getAll(table));
+        const results = await Promise.all(promises);
+        
+        const data: Record<string, any> = {};
+        tablesToFetch.forEach((table, index) => {
+            data[table] = results[index] || [];
+        });
 
         // If any critical fetch returned null (error), throw to trigger offline mode or retry
-        if (users === null || roles === null) {
+        if (results[0] === null || results[1] === null) {
             throw new Error("Error de conexión con la base de datos");
         }
-
+        
         const { data: settingsData, error } = await supabase.from('settings').select('*');
         const settings: Record<string, any> = {};
         if (!error && settingsData) {
             settingsData.forEach(s => { settings[s.key] = s.value; });
         }
+        data.settings = settings;
 
-        return { 
-            users: users || [], 
-            roles: roles || [], 
-            menu_items: menu_items || [], 
-            tables: tables || [], 
-            zones: zones || [], 
-            inventory: inventory || [], 
-            orders: orders || [], 
-            sales: sales || [], 
-            customers: customers || [], 
-            expenses: expenses || [], 
-            delivery_rates: delivery_rates || [], 
-            settings 
-        };
+        // Save fetched data to offline storage for future fallback
+        Object.keys(data).forEach(key => {
+            if (key !== 'settings') {
+                saveLocal(key, data[key]);
+            } else {
+                Object.keys(data.settings).forEach(settingKey => {
+                    saveLocal(settingKey, data.settings[settingKey]);
+                });
+            }
+        });
+
+        return data;
     },
     
     seedTable: async (table: string, items: any[]) => {
@@ -207,7 +252,7 @@ export const db = {
     
     saveSetting: async (key: string, value: any) => {
         if (!supabase) {
-            localStorage.setItem(`loco_offline_${key}`, JSON.stringify(value));
+            saveLocal(key, value);
             return;
         }
         const { error } = await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
@@ -222,13 +267,14 @@ export const db = {
                 username: 'master',
                 name: 'Soporte Técnico',
                 password: '',
-                roleId: 'role-admin'
+                roleId: 'role-admin',
+                sedeId: 'sede-principal',
             } as User;
         }
 
         // 2. Modo Offline / Fallback Local
         if (!supabase) {
-            const localUsers = JSON.parse(localStorage.getItem('loco_offline_users') || JSON.stringify(INITIAL_USERS));
+            const localUsers = loadLocal('users', INITIAL_USERS);
             const localUser = localUsers.find((u: User) => u.username === username && u.password === pass);
             return localUser || null;
         }
@@ -258,11 +304,16 @@ export const db = {
     },
     
     updateFields: async (table: string, id: string, fields: Partial<any>) => {
-        if (!supabase) return;
+        if (!supabase) {
+            const currentData = loadLocal(table);
+            const itemIndex = currentData.findIndex((i: any) => i.id === id);
+            if (itemIndex > -1) {
+                currentData[itemIndex] = { ...currentData[itemIndex], ...fields };
+                saveLocal(table, currentData);
+            }
+            return;
+        }
 
-        // Optimistic approach for speed in multi-user: 
-        // fetch current -> merge -> update. 
-        // Note: In high concurrency, this could have race conditions, but for POS status updates it's generally acceptable.
         const { data: current, error: fetchError } = await supabase.from(table).select('data').eq('id', id).single();
         if (fetchError || !current) {
             console.error(`Error fetching for update on ${table} with id ${id}:`, fetchError);
@@ -275,7 +326,7 @@ export const db = {
     },
     
     updateField: async (table: string, id: string, field: string, value: any) => {
-        if (!supabase) return;
+        // This function now uses updateFields, so it inherits its offline capability
         await db.updateFields(table, id, { [field]: value });
     },
     
@@ -284,7 +335,7 @@ export const db = {
             localStorage.clear();
             return;
         }
-        const tablesToDelete = ['users', 'roles', 'menu_items', 'tables', 'zones', 'inventory', 'orders', 'sales', 'customers', 'expenses', 'delivery_rates', 'settings'];
+        const tablesToDelete = ['users', 'roles', 'menu_items', 'tables', 'zones', 'inventory', 'orders', 'sales', 'customers', 'expenses', 'delivery_rates', 'settings', 'sedes'];
         for (const table of tablesToDelete) {
             const { error } = await supabase.from(table).delete().neq('id', `placeholder-${Date.now()}`);
             if (error) console.error(`Error deleting all data from ${table}:`, error);
@@ -297,5 +348,50 @@ export const db = {
         await supabase.from('users').insert(payload);
         const rolesPayload = INITIAL_ROLES.map(r => ({ id: r.id, data: r }));
         await supabase.from('roles').insert(rolesPayload);
-    }
+        const sedesPayload = INITIAL_SEDES.map(s => ({ id: s.id, data: s }));
+        await supabase.from('sedes').insert(sedesPayload);
+    },
+
+    uploadReceiptImage: async (file: File): Promise<string | null> => {
+        if (!supabase) return null;
+        
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${generateId('receipt')}.${fileExt}`;
+        const filePath = `public/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('receipts') // Bucket 'receipts' must be public
+            .upload(filePath, file);
+
+        if (uploadError) {
+            console.error('Error uploading receipt image:', uploadError);
+            return null;
+        }
+
+        const { data } = supabase.storage
+            .from('receipts')
+            .getPublicUrl(filePath);
+        
+        return data.publicUrl;
+    },
+
+    deleteReceiptImage: async (imageUrl: string): Promise<void> => {
+        if (!supabase || !imageUrl) return;
+        
+        try {
+            const url = new URL(imageUrl);
+            const path = url.pathname.split('/receipts/')[1];
+            if (!path) return;
+
+            const { error } = await supabase.storage
+                .from('receipts')
+                .remove([path]);
+            
+            if (error) {
+                console.error('Error deleting receipt image:', error);
+            }
+        } catch(e) {
+            console.error("Invalid image URL for deletion", e);
+        }
+    },
 };

@@ -1,15 +1,16 @@
-
 import React, { useState } from 'react';
-import type { User, Role } from '../types';
+import type { User, Role, Sede } from '../types';
 import { PlusIcon, EditIcon, TrashIcon, UserIcon } from './Icons';
 import { useToast } from '../hooks/useToast';
 
 interface UserManagerProps {
   users: User[];
   roles: Role[];
+  sedes: Sede[];
   addUser: (user: Omit<User, 'id'>) => void;
   updateUser: (user: User) => void;
   deleteUser: (userId: string) => void;
+  selectedSedeId: string;
 }
 
 const UserFormModal: React.FC<{
@@ -17,31 +18,36 @@ const UserFormModal: React.FC<{
     onClose: () => void;
     onSave: (user: any) => void;
     roles: Role[];
+    sedes: Sede[];
     userToEdit: User | null;
-}> = ({ isOpen, onClose, onSave, roles, userToEdit }) => {
+    selectedSedeId: string;
+}> = ({ isOpen, onClose, onSave, roles, sedes, userToEdit, selectedSedeId }) => {
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [roleId, setRoleId] = useState('');
+    const [sedeId, setSedeId] = useState('');
     const { addToast } = useToast();
 
     React.useEffect(() => {
-        if(userToEdit) {
+        if (userToEdit) {
             setName(userToEdit.name);
             setUsername(userToEdit.username);
-            setPassword(userToEdit.password);
+            setPassword(userToEdit.password || '');
             setRoleId(userToEdit.roleId);
+            setSedeId(userToEdit.sedeId);
         } else {
             setName('');
             setUsername('');
             setPassword('');
-            setRoleId(roles[0]?.id || '');
+            setRoleId(roles.find(r => r.name.toLowerCase().includes('mesero'))?.id || roles[0]?.id || '');
+            setSedeId(selectedSedeId === 'global' ? (sedes[0]?.id || '') : selectedSedeId);
         }
-    }, [userToEdit, isOpen, roles]);
+    }, [userToEdit, isOpen, roles, sedes, selectedSedeId]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username || !password || !roleId) {
+        if (!username || !password || !roleId || !sedeId) {
             addToast("Todos los campos son obligatorios.", 'error');
             return;
         }
@@ -50,7 +56,8 @@ const UserFormModal: React.FC<{
             name,
             username, 
             password, 
-            roleId 
+            roleId,
+            sedeId
         });
         onClose();
     };
@@ -64,10 +71,16 @@ const UserFormModal: React.FC<{
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <input type="text" placeholder="Nombre Completo" value={name} onChange={e => setName(e.target.value)} required className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
                     <input type="text" placeholder="Usuario (Login)" value={username} onChange={e => setUsername(e.target.value)} required className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
-                    <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
+                    <input type="password" placeholder={userToEdit ? "Nueva Contraseña (opcional)" : "Contraseña"} value={password} onChange={e => setPassword(e.target.value)} required={!userToEdit} className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" />
                     <select value={roleId} onChange={e => setRoleId(e.target.value)} className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white">
                         {roles.map(role => (
                             <option key={role.id} value={role.id} className="bg-gray-800">{role.name}</option>
+                        ))}
+                    </select>
+                    <select value={sedeId} onChange={e => setSedeId(e.target.value)} className="w-full p-2 border rounded bg-black/20 border-[var(--card-border)] focus:ring-[var(--primary-red)] focus:border-[var(--primary-red)] text-white" required>
+                        <option value="" disabled>Seleccionar Sede...</option>
+                        {sedes.map(sede => (
+                            <option key={sede.id} value={sede.id} className="bg-gray-800">{sede.name}</option>
                         ))}
                     </select>
                     <div className="flex justify-end gap-4 pt-4">
@@ -81,7 +94,7 @@ const UserFormModal: React.FC<{
 };
 
 
-export const UserManager: React.FC<UserManagerProps> = ({ users, roles, addUser, updateUser, deleteUser }) => {
+export const UserManager: React.FC<UserManagerProps> = ({ users, roles, sedes, addUser, updateUser, deleteUser, selectedSedeId }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
 
@@ -96,16 +109,22 @@ export const UserManager: React.FC<UserManagerProps> = ({ users, roles, addUser,
   };
 
   const handleSave = (user: any) => {
+    const userPayload = { ...user };
+    // If password is not changed on edit, don't overwrite it
+    if (user.id && !user.password) {
+        const originalUser = users.find(u => u.id === user.id);
+        userPayload.password = originalUser?.password;
+    }
+    
     if(user.id) {
-        updateUser(user);
+        updateUser(userPayload);
     } else {
-        addUser(user);
+        addUser(userPayload);
     }
   };
 
-  const getRoleName = (roleId: string) => {
-      return roles.find(r => r.id === roleId)?.name || 'Rol Desconocido';
-  }
+  const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'N/A';
+  const getSedeName = (sedeId: string) => sedes.find(s => s.id === sedeId)?.name || 'N/A';
 
   return (
     <div className="mb-8">
@@ -125,6 +144,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ users, roles, addUser,
                 <th scope="col" className="px-6 py-3">Nombre</th>
                 <th scope="col" className="px-6 py-3">Usuario</th>
                 <th scope="col" className="px-6 py-3">Rol</th>
+                <th scope="col" className="px-6 py-3">Sede</th>
                 <th scope="col" className="px-6 py-3 text-right">Acciones</th>
               </tr>
             </thead>
@@ -141,6 +161,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ users, roles, addUser,
                         {getRoleName(user.roleId)}
                       </span>
                   </td>
+                  <td className="px-6 py-4">{getSedeName(user.sedeId)}</td>
                   <td className="px-6 py-4 text-right">
                       <button onClick={() => openEditModal(user)} className="text-sky-400 hover:text-sky-300 mr-4 transition-colors p-2 rounded-full hover:bg-sky-500/10"><EditIcon className="w-4 h-4" /></button>
                       <button onClick={() => deleteUser(user.id)} className="text-red-500 hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-500/10"><TrashIcon className="w-4 h-4"/></button>
@@ -157,7 +178,9 @@ export const UserManager: React.FC<UserManagerProps> = ({ users, roles, addUser,
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
         roles={roles}
+        sedes={sedes}
         userToEdit={userToEdit}
+        selectedSedeId={selectedSedeId}
       />
     </div>
   );

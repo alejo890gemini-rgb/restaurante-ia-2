@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import PublicApp from './components/PublicApp';
 import { ToastProvider } from './hooks/useToast';
 import { ToastContainer } from './components/ToastContainer';
 
@@ -11,11 +10,10 @@ if (!rootElement) {
 }
 const root = createRoot(rootElement);
 
-// No more routing logic, just render the main app
 root.render(
     <React.StrictMode>
         <ToastProvider>
-            <App />
+            <PublicApp />
             <ToastContainer />
         </ToastProvider>
     </React.StrictMode>

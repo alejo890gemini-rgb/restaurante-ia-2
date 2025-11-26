@@ -1,26 +1,31 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserManager } from './UserManager';
 import { RoleManager } from './RoleManager';
 import { PrinterSettingsManager } from './PrinterSettings';
-import type { User, Role, PrinterSettings } from '../types';
-import { LockIcon, RefreshIcon, CloudUploadIcon, DownloadIcon, SettingsIcon, UserIcon, ShieldCheckIcon, InventoryIcon, SparklesIcon, CheckCircleIcon, XIcon } from './Icons';
+import { SedeManager } from './SedeManager';
+import type { User, Role, PrinterSettings, Sede } from '../types';
+import { LockIcon, RefreshIcon, CloudUploadIcon, DownloadIcon, SettingsIcon, UserIcon, ShieldCheckIcon, InventoryIcon, SparklesIcon, CheckCircleIcon, XIcon, MapPinIcon } from './Icons';
 import { useToast } from '../hooks/useToast';
 import { validateConnection } from '../services/geminiService';
 
 interface AdminSettingsProps {
     users: User[];
     roles: Role[];
+    sedes: Sede[];
     addUser: (user: Omit<User, 'id'>) => void;
     updateUser: (user: User) => void;
     deleteUser: (userId: string) => void;
     addRole: (role: Omit<Role, 'id'>) => void;
     updateRole: (role: Role) => void;
     deleteRole: (roleId: string) => void;
+    addSede: (sede: Omit<Sede, 'id'>) => void;
+    updateSede: (sede: Sede) => void;
+    deleteSede: (sedeId: string) => void;
     printerSettings: PrinterSettings;
     savePrinterSettings: (settings: PrinterSettings) => void;
     onFactoryReset: () => void;
     onImportData: (type: 'menu' | 'inventory', data: any[]) => void;
+    selectedSedeId: string;
 }
 
 const ApiKeyManagement: React.FC = () => {
@@ -284,7 +289,7 @@ const DataManagement: React.FC<{
 };
 
 export const AdminSettings: React.FC<AdminSettingsProps> = (props) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'printer' | 'data' | 'api'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sedes' | 'printer' | 'data' | 'api'>('users');
 
     return (
         <div className="space-y-6 pb-10">
@@ -301,14 +306,16 @@ export const AdminSettings: React.FC<AdminSettingsProps> = (props) => {
             <div className="flex space-x-2 border-b border-[var(--card-border)] mb-6 overflow-x-auto pb-1">
                 <button onClick={() => setActiveTab('users')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'users' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><UserIcon className="w-4 h-4"/> Usuarios</button>
                 <button onClick={() => setActiveTab('roles')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'roles' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><ShieldCheckIcon className="w-4 h-4"/> Roles</button>
+                <button onClick={() => setActiveTab('sedes')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'sedes' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><MapPinIcon className="w-4 h-4"/> Sedes</button>
                 <button onClick={() => setActiveTab('printer')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'printer' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><SettingsIcon className="w-4 h-4"/> Negocio</button>
                 <button onClick={() => setActiveTab('api')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'api' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><SparklesIcon className="w-4 h-4"/> IA & API</button>
                 <button onClick={() => setActiveTab('data')} className={`flex items-center gap-2 pb-2 px-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'data' ? 'text-[var(--accent-yellow)] border-b-2 border-[var(--accent-yellow)]' : 'text-gray-400 hover:text-white'}`}><CloudUploadIcon className="w-4 h-4"/> Datos</button>
             </div>
             
             <div className="min-h-[400px]">
-                {activeTab === 'users' && <UserManager users={props.users} roles={props.roles} addUser={props.addUser} updateUser={props.updateUser} deleteUser={props.deleteUser} />}
+                {activeTab === 'users' && <UserManager users={props.users} roles={props.roles} addUser={props.addUser} updateUser={props.updateUser} deleteUser={props.deleteUser} sedes={props.sedes} selectedSedeId={props.selectedSedeId}/>}
                 {activeTab === 'roles' && <RoleManager roles={props.roles} addRole={props.addRole} updateRole={props.updateRole} deleteRole={props.deleteRole} />}
+                {activeTab === 'sedes' && <SedeManager sedes={props.sedes} addSede={props.addSede} updateSede={props.updateSede} deleteSede={props.deleteSede} />}
                 {activeTab === 'printer' && <PrinterSettingsManager settings={props.printerSettings} onSave={props.savePrinterSettings} />}
                 {activeTab === 'api' && <ApiKeyManagement />}
                 {activeTab === 'data' && <DataManagement onFactoryReset={props.onFactoryReset} onImportData={props.onImportData} />}

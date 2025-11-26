@@ -1,15 +1,13 @@
 
-
-import React, { Component, useState, useEffect, ReactNode, ErrorInfo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { POS } from './components/POS';
 import { MenuManager } from './components/MenuManager';
 import { TableManager } from './components/TableManager';
-import type { View, MenuItem, Table, Order, Sale, TableStatus, PaymentMethod, OrderStatus, InventoryItem, Ingredient, DeliveryStatus, User, Role, Zone, PrinterSettings, CategoryConfig, Customer, DeliveryRate, LoyaltySettings, Expense, ProfeLocoAction, Permission } from './types';
-import { INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_INVENTORY_ITEMS, INITIAL_USERS, INITIAL_ROLES, INITIAL_ZONES, INITIAL_PRINTER_SETTINGS, INITIAL_CATEGORY_CONFIG, INITIAL_LOYALTY_SETTINGS, EXPENSE_CATEGORIES, AVAILABLE_PERMISSIONS } from './constants';
-import { MenuIcon, XIcon, BrainCircuitIcon } from './components/Icons';
-import { KitchenTicketModal } from './components/KitchenTicketModal';
+import type { View, MenuItem, Table, Order, Sale, TableStatus, PaymentMethod, OrderStatus, InventoryItem, DeliveryStatus, User, Role, Zone, PrinterSettings, CategoryConfig, Customer, DeliveryRate, LoyaltySettings, Expense, ProfeLocoAction, Sede } from './types';
+import { BASE_MENU_ITEMS, INITIAL_TABLES, INITIAL_INVENTORY_ITEMS, INITIAL_USERS, INITIAL_ROLES, INITIAL_ZONES, INITIAL_PRINTER_SETTINGS, INITIAL_CATEGORY_CONFIG, INITIAL_LOYALTY_SETTINGS, EXPENSE_CATEGORIES, INITIAL_SEDES } from './constants';
+import { MenuIcon, BrainCircuitIcon } from './components/Icons';
 import { useToast } from './hooks/useToast';
 import { WhatsAppManager } from './components/WhatsAppManager';
 import { Chatbot } from './components/Chatbot';
@@ -27,60 +25,12 @@ import { supabase } from './services/supabaseClient';
 import { KitchenMonitor } from './components/KitchenMonitor';
 import { ExpensesManager } from './components/ExpensesManager';
 import { MarketingManager } from './components/MarketingManager';
-import { formatPrice } from './utils/formatPrice';
+import { QrManager } from './components/QrManager';
 import { generateId } from './utils/generateId';
+import { formatPrice } from './utils/formatPrice';
 
-// Explicitly define props and state interfaces for ErrorBoundary
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-// --- ERROR BOUNDARY COMPONENT ---
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, error: null };
-  declare props: Readonly<ErrorBoundaryProps>;
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 text-white font-sans">
-          <div className="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-lg w-full border border-red-600">
-            <div className="flex items-center gap-3 mb-4 text-red-500">
-               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-               </svg>
-               <h1 className="text-2xl font-bold">Algo salió mal</h1>
-            </div>
-            <p className="text-gray-300 mb-4">La aplicación ha encontrado un error inesperado.</p>
-            <button 
-              onClick={() => { localStorage.clear(); window.location.reload(); }} 
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors"
-            >
-              Recargar Aplicación
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const AppContent: React.FC = () => {
-  // -- STATE --
+const App: React.FC = () => {
+  // -- AUTH STATE --
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
         const stored = localStorage.getItem('loco_session');
@@ -88,525 +38,775 @@ const AppContent: React.FC = () => {
     } catch { return null; }
   });
 
+  // -- UI STATE --
   const [currentView, setCurrentView] = useState<View>('DASHBOARD');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [orderForTicket, setOrderForTicket] = useState<Order | null>(null);
   const [isChatbotOpen, setChatbotOpen] = useState(false);
   const { addToast } = useToast();
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(!!supabase);
-  
   const [selectedTableIdForPos, setSelectedTableIdForPos] = useState<string | null>(null);
 
-  // Data States
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [tables, setTables] = useState<Table[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
+  // -- DATA STATE --
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(BASE_MENU_ITEMS);
+  const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
+  const [zones, setZones] = useState<Zone[]>(INITIAL_ZONES);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY_ITEMS);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
   const [printerSettings, setPrinterSettings] = useState<PrinterSettings>(INITIAL_PRINTER_SETTINGS);
-  const [categoryConfigs, setCategoryConfigs] = useState<CategoryConfig[]>(INITIAL_CATEGORY_CONFIG);
   const [deliveryRates, setDeliveryRates] = useState<DeliveryRate[]>([]);
+  const [categoryConfigs, setCategoryConfigs] = useState<CategoryConfig[]>(INITIAL_CATEGORY_CONFIG);
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings>(INITIAL_LOYALTY_SETTINGS);
-  
-  // Helper to set initial data when DB fails or is empty
-  const loadFallbackData = () => {
-      setMenuItems(INITIAL_MENU_ITEMS);
-      setTables(INITIAL_TABLES);
-      setZones(INITIAL_ZONES);
-      setInventoryItems(INITIAL_INVENTORY_ITEMS);
-      setUsers(INITIAL_USERS);
-      setRoles(INITIAL_ROLES);
-      setPrinterSettings(INITIAL_PRINTER_SETTINGS);
-      setCategoryConfigs(INITIAL_CATEGORY_CONFIG);
-      setLoyaltySettings(INITIAL_LOYALTY_SETTINGS);
-      setExpenseCategories(EXPENSE_CATEGORIES);
-      // Empty arrays for transactional data
-      setOrders([]);
-      setSales([]);
-      setCustomers([]);
-      setExpenses([]);
-      setDeliveryRates([]);
-  };
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<string[]>(EXPENSE_CATEGORIES);
+  const [roles, setRoles] = useState<Role[]>(INITIAL_ROLES);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [sedes, setSedes] = useState<Sede[]>(INITIAL_SEDES);
+  const [selectedSedeId, setSelectedSedeId] = useState<string>('sede-principal');
 
-  // -- REALTIME SYNC & DATA LOADING --
+  // -- INITIALIZATION --
   const fetchData = useCallback(async () => {
     try {
-      const results = await db.fetchAllTables();
-      
-      setIsOnline(!!supabase); // Update online status
-
-      // Initial Seeding only if strictly empty (and we are online)
-      if (supabase && results.users.length === 0 && results.roles.length === 0) {
-          console.log("DB Vacía. Sembrando datos...");
-          await db.seedTable('users', INITIAL_USERS);
-          await db.seedTable('roles', INITIAL_ROLES);
-          await db.seedTable('menu_items', INITIAL_MENU_ITEMS);
-          await db.seedTable('tables', INITIAL_TABLES);
-          await db.seedTable('zones', INITIAL_ZONES);
-          await db.seedTable('inventory', INITIAL_INVENTORY_ITEMS);
-          
-          // Initialize settings
-          await db.saveSetting('printer_settings', INITIAL_PRINTER_SETTINGS);
-          await db.saveSetting('category_configs', INITIAL_CATEGORY_CONFIG);
-          await db.saveSetting('loyalty_settings', INITIAL_LOYALTY_SETTINGS);
-          await db.saveSetting('expense_categories', EXPENSE_CATEGORIES);
-          
-          // Refresh after seeding
-          const fresh = await db.fetchAllTables();
-          Object.assign(results, fresh);
-      }
-
-      // Update State
-      setMenuItems(results.menu_items);
-      setTables(results.tables);
-      setZones(results.zones);
-      setOrders(results.orders);
-      setSales(results.sales);
-      setInventoryItems(results.inventory);
-      setUsers(results.users);
-      setRoles(results.roles);
-      setCustomers(results.customers);
-      setExpenses(results.expenses);
-      setDeliveryRates(results.delivery_rates);
-      
-      // Settings with safe defaults
-      setPrinterSettings(results.settings.printer_settings || INITIAL_PRINTER_SETTINGS);
-      setCategoryConfigs(results.settings.category_configs || INITIAL_CATEGORY_CONFIG);
-      setLoyaltySettings(results.settings.loyalty_settings || INITIAL_LOYALTY_SETTINGS);
-      setExpenseCategories(results.settings.expense_categories || EXPENSE_CATEGORIES);
-
-    } catch (error) {
-      console.error("Error loading data (Switching to Offline):", error);
-      setIsOnline(false);
-      loadFallbackData();
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-    
-    if (supabase) {
-      const tablesToSubscribe = ['users', 'roles', 'menu_items', 'tables', 'zones', 'inventory', 'orders', 'sales', 'customers', 'expenses', 'delivery_rates', 'settings'];
-      
-      // Debounce fetch to avoid flashing on rapid updates
-      let debounceTimer: any;
-      const subscription = db.subscribe(tablesToSubscribe, (payload) => {
-        // console.log('Realtime change:', payload); // Debug
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            fetchData();
-        }, 300); // 300ms delay to group updates
-      });
-      
-      return () => { subscription?.unsubscribe(); };
-    }
-  }, [fetchData]);
-  
-  // -- LOGIC --
-
-  const handleLogin = async (username: string, pass: string): Promise<boolean> => {
-    setLoginError('');
-    setIsLoading(true);
-    try {
-        const user = await db.login(username, pass);
-        if (user) {
-            setCurrentUser(user);
-            localStorage.setItem('loco_session', JSON.stringify(user));
-            
-            // Permissions Logic
-            const role = roles.find(r => r.id === user.roleId);
-            if (user.username === 'admin' || user.username === 'master' || user.roleId === 'role-admin') {
-                setCurrentView('DASHBOARD');
-            } else if (role?.permissions.includes('POS_ACCESS')) {
-                setCurrentView('POS');
-            } else if (role?.permissions.includes('KITCHEN_MONITOR')) {
-                setCurrentView('KITCHEN');
-            } else {
-                setCurrentView('DASHBOARD');
+        const data = await db.fetchAllTables();
+        if (data) {
+            if (data.menu_items?.length) setMenuItems(data.menu_items);
+            if (data.tables?.length) setTables(data.tables);
+            if (data.zones?.length) setZones(data.zones);
+            if (data.orders?.length) setOrders(data.orders);
+            if (data.sales?.length) setSales(data.sales);
+            if (data.inventory?.length) setInventory(data.inventory);
+            if (data.customers?.length) setCustomers(data.customers);
+            if (data.delivery_rates?.length) setDeliveryRates(data.delivery_rates);
+            if (data.expenses?.length) setExpenses(data.expenses);
+            if (data.users?.length) setUsers(data.users);
+            if (data.roles?.length) setRoles(data.roles);
+            if (data.sedes?.length) {
+                setSedes(data.sedes);
             }
-            return true;
-        } else {
-            setLoginError('Usuario o contraseña incorrectos');
-            // If login fails and DB is potentially empty (first run issue), try to force seed
-            if (users.length === 0 && isOnline) {
-                console.warn("Posible primer inicio. Forzando usuarios por defecto...");
-                await db.forceSeedUsers();
-                return handleLogin(username, pass); // Retry once
+
+            // Settings
+            if (data.settings) {
+                if (data.settings.printer_settings) setPrinterSettings(data.settings.printer_settings);
+                if (data.settings.category_configs) setCategoryConfigs(data.settings.category_configs);
+                if (data.settings.loyalty_settings) setLoyaltySettings(data.settings.loyalty_settings);
+                if (data.settings.expense_categories) setExpenseCategories(data.settings.expense_categories);
             }
-            return false;
         }
-    } catch (e) {
-        setLoginError("Error de conexión.");
-        return false;
+    } catch (error) {
+        console.error("Error initializing data:", error);
+        addToast('Error cargando datos. Modo Offline activado.', 'error');
     } finally {
         setIsLoading(false);
     }
-  };
+  }, [addToast]);
 
-  const handleLogout = async () => {
-      await db.logout();
-      setCurrentUser(null);
-      localStorage.removeItem('loco_session');
-  };
-  
-  const handleOpenTableInPOS = (tableId: string) => {
-      setSelectedTableIdForPos(tableId);
-      setCurrentView('POS');
-  };
+  useEffect(() => {
+    fetchData();
 
-  // --- CRUD OPERATIONS with Robust IDs ---
-
-  const addUser = async (user: Omit<User, 'id'>) => {
-      const newUser = { ...user, id: generateId('user') };
-      await db.upsert('users', newUser);
-  };
-  const updateUser = async (user: User) => await db.upsert('users', user);
-  const deleteUser = async (userId: string) => await db.delete('users', userId);
-  
-  const addRole = async (role: Omit<Role, 'id'>) => await db.upsert('roles', { ...role, id: generateId('role') });
-  const updateRole = async (role: Role) => await db.upsert('roles', role);
-  const deleteRole = async (roleId: string) => await db.delete('roles', roleId);
-  
-  const savePrinterSettings = async (settings: PrinterSettings) => {
-      setPrinterSettings(settings); 
-      await db.saveSetting('printer_settings', settings);
-  };
-  const updateCategoryConfigs = async (newConfigs: CategoryConfig[]) => {
-    setCategoryConfigs(newConfigs);
-    await db.saveSetting('category_configs', newConfigs);
-  }
-  
-  const addMenuItem = async (item: Omit<MenuItem, 'id'>) => await db.upsert('menu_items', { ...item, id: generateId('menu') });
-  const updateMenuItem = async (updatedItem: MenuItem) => await db.upsert('menu_items', updatedItem);
-  const deleteMenuItem = async (itemId: string) => await db.delete('menu_items', itemId);
-  
-  const addZone = async (zone: Omit<Zone, 'id'>) => {
-    const newZone = { ...zone, id: generateId('zone') };
-    // Optimistic
-    setZones(prev => [...prev, newZone]);
-    await db.upsert('zones', newZone);
-  };
-
-  const updateZone = async (zone: Zone) => {
-    setZones(prev => prev.map(z => z.id === zone.id ? zone : z));
-    await db.upsert('zones', zone);
-  };
-  
-  const deleteZone = async (zoneId: string): Promise<boolean> => {
-       if (tables.some(t => t.zoneId === zoneId)) {
-           addToast('No se puede eliminar un salón con mesas.', 'error');
-           return false;
-       }
-      setZones(prev => prev.filter(z => z.id !== zoneId));
-      await db.delete('zones', zoneId);
-      return true;
-  };
-  
-  const addTable = async (table: Omit<Table, 'id' | 'status'>) => {
-    const newTable = { ...table, id: generateId('table'), status: 'available' as TableStatus };
-    setTables(prev => [...prev, newTable]);
-    await db.upsert('tables', newTable);
-  };
-  
-  const updateTable = async (updatedTable: Table) => {
-    setTables(prev => prev.map(t => t.id === updatedTable.id ? updatedTable : t));
-    await db.upsert('tables', updatedTable);
-  };
-
-  const deleteTable = async (tableId: string) => {
-    if(tables.find(t => t.id === tableId)?.status === 'occupied') {
-        addToast('Mesa ocupada, no se puede eliminar', 'error');
-        return;
-    }
-    setTables(prev => prev.filter(t => t.id !== tableId));
-    await db.delete('tables', tableId);
-  };
-  
-  const updateTableStatus = async (tableId: string, status: TableStatus) => {
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, status } : t));
-    await db.updateField('tables', tableId, 'status', status);
-  };
-
-  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    let readyAt = null;
-    if (status === 'ready') readyAt = new Date().toISOString();
-
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status, readyAt: readyAt || o.readyAt } : o));
-    await db.updateFields('orders', orderId, { status, readyAt });
-
-    const order = orders.find(o => o.id === orderId);
-    if(status === 'ready' && order?.orderType === 'delivery') {
-      await updateOrderDeliveryStatus(orderId, 'ready');
-    }
-    addToast(status === 'ready' ? 'Orden marcada como lista' : 'Orden actualizada', 'info');
-  };
-
-  const updateOrderDeliveryStatus = async (orderId: string, status: DeliveryStatus, driverName?: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order || !order.deliveryInfo) return;
-
-    const now = new Date().toISOString();
-    let updatedTimestamps = { ...order.deliveryInfo };
-    switch(status) {
-        case 'kitchen': updatedTimestamps.confirmedAt = now; break;
-        case 'ready': updatedTimestamps.readyAt = now; break;
-        case 'on-way': updatedTimestamps.dispatchedAt = now; break;
-        case 'delivered': updatedTimestamps.deliveredAt = now; break;
-    }
-
-    const newDeliveryInfo = { ...order.deliveryInfo, ...updatedTimestamps, deliveryStatus: status, driverName: driverName || order.deliveryInfo.driverName };
-    const orderStatusUpdate = (status === 'kitchen') ? { status: 'open' as OrderStatus } : {};
-    
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, deliveryInfo: newDeliveryInfo, ...orderStatusUpdate } : o));
-    await db.updateFields('orders', orderId, { deliveryInfo: newDeliveryInfo, ...orderStatusUpdate });
-  };
-
-  const createOrder = async (order: Order, showTicket: boolean = true) => {
-    const isNew = !orders.some(o => o.id === order.id);
-    const itemsForTicket = isNew ? order.items : order.items.filter(i => !i.isPrinted);
-    
-    if (showTicket && itemsForTicket.length > 0) {
-      setOrderForTicket({ ...order, items: itemsForTicket });
-    }
-    
-    const orderToSave = { ...order, items: order.items.map(i => ({ ...i, isPrinted: true })) };
-    // Ensure Status Consistency
-    if (orderToSave.orderType === 'dine-in' || orderToSave.orderType === 'to-go') {
-        if(orderToSave.status !== 'completed' && orderToSave.status !== 'cancelled') {
-            orderToSave.status = 'open';
+    // Realtime Subscription
+    const subscription = db.subscribe(
+        ['orders', 'tables', 'inventory', 'sales', 'users', 'menu_items'], 
+        (payload) => {
+            fetchData(); 
         }
-    }
-    
-    setOrders(prev => isNew ? [...prev, orderToSave] : prev.map(o => o.id === orderToSave.id ? orderToSave : o));
-    await db.upsert('orders', orderToSave);
+    );
 
-    if (orderToSave.orderType === 'dine-in' && orderToSave.tableId) updateTableStatus(orderToSave.tableId, 'occupied');
-    addToast(isNew ? 'Orden creada' : 'Orden actualizada', isNew ? 'success' : 'info');
+    return () => {
+        subscription?.unsubscribe();
+    };
+  }, [fetchData]);
+
+  useEffect(() => {
+      if (currentUser) {
+          setSelectedSedeId(currentUser.sedeId);
+      }
+  }, [currentUser]);
+
+  // -- HANDLERS --
+
+  const handleLogin = async (u: string, p: string) => {
+    const user = await db.login(u, p);
+    if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('loco_session', JSON.stringify(user));
+        setLoginError('');
+        setSelectedSedeId(user.sedeId);
+        return true;
+    } else {
+        setLoginError('Credenciales inválidas');
+        return false;
+    }
   };
 
-  const deductStockFromRecipe = async (recipe: Ingredient[], quantitySold: number) => {
-      for (const ing of recipe) {
-          const item = inventoryItems.find(i => i.id === ing.inventoryItemId);
-          if(item) {
-              const newStock = Math.max(0, item.stock - (ing.quantity * quantitySold));
-              await db.updateField('inventory', item.id, 'stock', newStock);
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('loco_session');
+    setCurrentView('DASHBOARD');
+  };
+
+  // --- MENU HANDLERS ---
+  const handleAddMenuItem = (item: Omit<MenuItem, 'id'>) => {
+      const newItem = { ...item, id: generateId('menu') };
+      setMenuItems(prev => [...prev, newItem]);
+      db.insert('menu_items', newItem);
+  };
+  const handleUpdateMenuItem = (item: MenuItem) => {
+      setMenuItems(prev => prev.map(i => i.id === item.id ? item : i));
+      db.upsert('menu_items', item);
+  };
+  const handleDeleteMenuItem = (id: string) => {
+      setMenuItems(prev => prev.filter(i => i.id !== id));
+      db.delete('menu_items', id);
+  };
+
+  // --- TABLE & ZONE HANDLERS ---
+  const handleAddTable = (table: Omit<Table, 'id' | 'status'>) => {
+      const newTable: Table = { ...table, id: generateId('table'), status: 'available' };
+      setTables(prev => [...prev, newTable]);
+      db.insert('tables', newTable);
+  };
+  const handleUpdateTable = (table: Table) => {
+      setTables(prev => prev.map(t => t.id === table.id ? table : t));
+      db.upsert('tables', table);
+  };
+  const handleDeleteTable = (id: string) => {
+      setTables(prev => prev.filter(t => t.id !== id));
+      db.delete('tables', id);
+  };
+  const handleUpdateTableStatus = (id: string, status: TableStatus) => {
+      const table = tables.find(t => t.id === id);
+      if (table) {
+          const updated = { ...table, status };
+          handleUpdateTable(updated);
+      }
+  };
+  
+  const handleAddZone = (zone: Omit<Zone, 'id'>) => {
+      const newZone = { ...zone, id: generateId('zone') };
+      setZones(prev => [...prev, newZone]);
+      db.insert('zones', newZone);
+  }
+  const handleUpdateZone = (zone: Zone) => {
+      setZones(prev => prev.map(z => z.id === zone.id ? zone : z));
+      db.upsert('zones', zone);
+  }
+  const handleDeleteZone = async (id: string) => {
+      if (tables.some(t => t.zoneId === id)) {
+          addToast('No se puede eliminar un salón con mesas.', 'error');
+          return false;
+      }
+      setZones(prev => prev.filter(z => z.id !== id));
+      await db.delete('zones', id);
+      return true;
+  }
+
+  // --- POS & ORDER HANDLERS ---
+  const handleCreateOrder = (order: Order) => {
+      const existingIndex = orders.findIndex(o => o.id === order.id);
+      if (existingIndex >= 0) {
+          const updatedOrders = [...orders];
+          updatedOrders[existingIndex] = order;
+          setOrders(updatedOrders);
+          db.upsert('orders', order);
+      } else {
+          setOrders(prev => [...prev, order]);
+          db.insert('orders', order);
+      }
+
+      if (order.tableId && order.status === 'open') {
+          handleUpdateTableStatus(order.tableId, 'occupied');
+      }
+      addToast('Orden guardada', 'success');
+  };
+
+  const handleUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+          const updatedOrder = { 
+              ...order, 
+              status,
+              readyAt: status === 'ready' ? new Date().toISOString() : order.readyAt 
+          };
+          setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
+          db.upsert('orders', updatedOrder);
+          
+          // If completed or cancelled, free the table
+          if ((status === 'completed' || status === 'cancelled') && order.tableId) {
+              handleUpdateTableStatus(order.tableId, 'available');
           }
       }
   };
 
-  const updateCustomerData = async (order: Order, saleTotal: number) => {
-    const phone = order.deliveryInfo?.phone || order.toGoPhone;
-    if (!phone) return;
+  const handleCompleteSale = async (order: Order, paymentMethod: PaymentMethod) => {
+      const total = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0) + (order.deliveryInfo?.deliveryCost || 0);
+      
+      // 1. Create Sale
+      const sale: Sale = {
+          id: generateId('sale'),
+          order: { ...order, status: 'completed' },
+          total,
+          timestamp: new Date().toISOString(),
+          paymentMethod,
+          sedeId: order.sedeId
+      };
+      setSales(prev => [...prev, sale]);
+      await db.insert('sales', sale);
 
-    const name = order.deliveryInfo?.name || order.toGoName || 'Cliente';
-    const existingCustomer = customers.find(c => c.phone === phone);
-    const pointsEarned = Math.floor(saleTotal * loyaltySettings.pointsPerPeso);
+      // 2. Update Order Status
+      handleUpdateOrderStatus(order.id, 'completed');
 
-    let customerToUpdate: Customer;
-    if (existingCustomer) {
-        const newPoints = (existingCustomer.loyaltyPoints || 0) + pointsEarned;
-        const newTier = loyaltySettings.tiers.slice().reverse().find(t => newPoints >= t.minPoints);
-        customerToUpdate = {
-            ...existingCustomer,
-            totalSpent: existingCustomer.totalSpent + saleTotal,
-            visitCount: existingCustomer.visitCount + 1,
-            lastVisit: new Date().toISOString(),
-            loyaltyPoints: newPoints,
-            loyaltyTierId: newTier?.id || existingCustomer.loyaltyTierId,
-        };
-    } else {
-        const newTier = loyaltySettings.tiers.slice().reverse().find(t => pointsEarned >= t.minPoints);
-        customerToUpdate = {
-            id: generateId('cust'), 
-            name, phone,
-            totalSpent: saleTotal,
-            visitCount: 1,
-            lastVisit: new Date().toISOString(),
-            loyaltyPoints: pointsEarned,
-            loyaltyTierId: newTier?.id || loyaltySettings.tiers[0].id,
-        };
-    }
-    await db.upsert('customers', customerToUpdate);
+      // 3. Deduct Inventory
+      const newInventory = [...inventory];
+      let inventoryChanged = false;
+
+      for (const item of order.items) {
+          // Recipe deduction
+          if (item.recipe && item.recipe.length > 0) {
+              item.recipe.forEach(ing => {
+                  const invIndex = newInventory.findIndex(inv => inv.id === ing.inventoryItemId);
+                  if (invIndex > -1) {
+                      newInventory[invIndex].stock = Math.max(0, newInventory[invIndex].stock - (ing.quantity * item.quantity));
+                      inventoryChanged = true;
+                      db.upsert('inventory', newInventory[invIndex]); // Sync individual item
+                  }
+              });
+          } 
+          // Direct mapping deduction (fallback if name matches)
+          else {
+              const invIndex = newInventory.findIndex(inv => inv.name.toLowerCase() === item.name.toLowerCase());
+              if (invIndex > -1 && newInventory[invIndex].unit === 'unidad') {
+                  newInventory[invIndex].stock = Math.max(0, newInventory[invIndex].stock - item.quantity);
+                  inventoryChanged = true;
+                  db.upsert('inventory', newInventory[invIndex]);
+              }
+          }
+      }
+      if (inventoryChanged) setInventory(newInventory);
+
+      // 4. Loyalty Points
+      if (loyaltySettings.isEnabled) {
+          const customerPhone = order.deliveryInfo?.phone || order.toGoPhone;
+          const customerName = order.deliveryInfo?.name || order.toGoName;
+          
+          if (customerPhone && customerName) {
+              let customer = customers.find(c => c.phone === customerPhone);
+              const pointsEarned = Math.floor(total * loyaltySettings.pointsPerPeso);
+              
+              if (customer) {
+                  const updatedCustomer = {
+                      ...customer,
+                      totalSpent: customer.totalSpent + total,
+                      visitCount: customer.visitCount + 1,
+                      lastVisit: new Date().toISOString(),
+                      loyaltyPoints: (customer.loyaltyPoints || 0) + pointsEarned
+                  };
+                  handleUpdateCustomer(updatedCustomer);
+              } else {
+                  const newCustomer: Customer = {
+                      id: generateId('cust'),
+                      name: customerName,
+                      phone: customerPhone,
+                      totalSpent: total,
+                      visitCount: 1,
+                      lastVisit: new Date().toISOString(),
+                      loyaltyPoints: pointsEarned,
+                      sedeId: selectedSedeId
+                  };
+                  handleAddCustomer(newCustomer);
+              }
+          }
+      }
+
+      addToast(`Venta registrada: $${total.toLocaleString()}`, 'success');
   };
 
-  const completeSale = async (order: Order, paymentMethod: PaymentMethod) => {
-    const total = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0) + (order.deliveryInfo?.deliveryCost || 0);
-    const newSale: Omit<Sale, 'id'> = { order, timestamp: new Date().toISOString(), total, paymentMethod };
-
-    // Update Orders locally first
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'completed' } : o));
-    
-    // Persist
-    await db.insert('sales', { ...newSale, id: generateId('sale') });
-    await db.updateFields('orders', order.id, { status: 'completed' as OrderStatus });
-    
-    order.items.forEach(item => {
-        const menuItem = menuItems.find(mi => mi.id === item.id);
-        if(menuItem?.recipe) deductStockFromRecipe(menuItem.recipe, item.quantity);
-    });
-
-    if (loyaltySettings.isEnabled && (order.orderType === 'delivery' || order.orderType === 'to-go')) await updateCustomerData(order, total);
-    if (order.orderType === 'dine-in' && order.tableId) await updateTableStatus(order.tableId, 'available');
-    addToast('Venta completada', 'success');
+  // --- INVENTORY HANDLERS ---
+  const handleAddInventoryItem = (item: Omit<InventoryItem, 'id'>) => {
+      const newItem = { ...item, id: generateId('inv'), sedeId: selectedSedeId };
+      setInventory(prev => [...prev, newItem]);
+      db.insert('inventory', newItem);
   };
-
-  const deleteSale = async (saleId: string) => await db.delete('sales', saleId);
-  const updateSale = async (updatedSale: Sale) => await db.upsert('sales', updatedSale);
-  
-  const addInventoryItem = async (item: Omit<InventoryItem, 'id'>) => await db.insert('inventory', { ...item, id: generateId('inv') });
-  const updateInventoryItem = async (updatedItem: InventoryItem) => await db.upsert('inventory', updatedItem);
-  const adjustInventoryItemStock = async (itemId: string, newStock: number) => await db.updateField('inventory', itemId, 'stock', newStock);
-  
-  const addCustomer = async (customer: Omit<Customer, 'id' | 'totalSpent' | 'visitCount' | 'lastVisit'>) => {
-      const newCustomer = { ...customer, id: generateId('cust'), totalSpent: 0, visitCount: 0, lastVisit: new Date().toISOString() };
-      await db.insert('customers', newCustomer);
+  const handleUpdateInventoryItem = (item: InventoryItem) => {
+      setInventory(prev => prev.map(i => i.id === item.id ? item : i));
+      db.upsert('inventory', item);
   };
-  const updateCustomer = async (customer: Customer) => await db.upsert('customers', customer);
-  const deleteCustomer = async (customerId: string) => await db.delete('customers', customerId);
-  
-  const saveDeliveryRate = async (rate: Omit<DeliveryRate, 'id'>) => await db.insert('delivery_rates', { ...rate, id: generateId('rate') });
-  const deleteDeliveryRate = async (rateId: string) => await db.delete('delivery_rates', rateId);
-  
-  const saveLoyaltySettings = async (settings: LoyaltySettings) => {
-    setLoyaltySettings(settings);
-    await db.saveSetting('loyalty_settings', settings);
-  }
-  
-  const addExpense = async (expense: Omit<Expense, 'id'>) => await db.insert('expenses', { ...expense, id: generateId('exp') });
-  const updateExpense = async (expense: Expense) => await db.upsert('expenses', expense);
-  const deleteExpense = async (expenseId: string) => await db.delete('expenses', expenseId);
-  
-  const saveExpenseCategories = async (categories: string[]) => {
-    setExpenseCategories(categories);
-    await db.saveSetting('expense_categories', categories);
-  }
-
-  const handleFactoryReset = async () => { 
-      if(window.confirm("¿ESTÁS SEGURO?")) { 
-          await db.deleteAllData(); 
-          localStorage.clear(); 
-          window.location.reload(); 
+  const handleAdjustStock = (itemId: string, newStock: number) => {
+      const item = inventory.find(i => i.id === itemId);
+      if (item) {
+          handleUpdateInventoryItem({ ...item, stock: newStock });
       }
   };
-  
-  const handleBulkImport = async (type: 'menu' | 'inventory', data: any[]) => {
-      const items = data.map(i => ({...i, id: generateId(type === 'menu' ? 'menu' : 'inv')}));
-      await db.seedTable(type === 'menu' ? 'menu_items' : 'inventory', items);
-      addToast(`Importados ${data.length} registros`, 'success');
+
+  // --- CUSTOMER HANDLERS ---
+  const handleAddCustomer = (customer: Omit<Customer, 'id' | 'totalSpent' | 'visitCount' | 'lastVisit'>) => {
+      const newCustomer: Customer = {
+          ...customer,
+          id: generateId('cust'),
+          totalSpent: 0,
+          visitCount: 0,
+          lastVisit: '',
+          sedeId: selectedSedeId
+      };
+      setCustomers(prev => [...prev, newCustomer]);
+      db.insert('customers', newCustomer);
+  };
+  const handleUpdateCustomer = (customer: Customer) => {
+      setCustomers(prev => prev.map(c => c.id === customer.id ? customer : c));
+      db.upsert('customers', customer);
+  };
+  const handleDeleteCustomer = (id: string) => {
+      setCustomers(prev => prev.filter(c => c.id !== id));
+      db.delete('customers', id);
   };
 
-  const handleChatbotAction = async (action: ProfeLocoAction) => {
-    switch (action.name) {
-      case 'addExpense':
-        await addExpense({
-          description: action.args.description,
-          amount: action.args.amount,
-          category: action.args.category,
-          date: action.args.date || new Date().toISOString(),
-        });
-        return `¡Gasto de ${formatPrice(action.args.amount)} para "${action.args.description}" registrado! 👍`;
-      
-      case 'addInventoryItem':
-        await addInventoryItem({
-          name: action.args.name,
-          stock: action.args.stock,
-          unit: action.args.unit,
-          cost: action.args.cost,
-          alertThreshold: action.args.alertThreshold || 0,
-        });
-        return `¡"${action.args.name}" añadido al inventario! 🔥`;
+  // --- DELIVERY HANDLERS ---
+  const handleUpdateOrderDeliveryStatus = (orderId: string, status: DeliveryStatus, driverName?: string) => {
+      const order = orders.find(o => o.id === orderId);
+      if (order && order.deliveryInfo) {
+          const updatedInfo = { ...order.deliveryInfo, deliveryStatus: status };
+          if (driverName) updatedInfo.driverName = driverName;
+          
+          // Track timestamps
+          if (status === 'kitchen') updatedInfo.confirmedAt = new Date().toISOString();
+          if (status === 'ready') updatedInfo.readyAt = new Date().toISOString();
+          if (status === 'on-way') updatedInfo.dispatchedAt = new Date().toISOString();
+          if (status === 'delivered') updatedInfo.deliveredAt = new Date().toISOString();
 
-      case 'navigateToView':
-        setCurrentView(action.args.view);
-        return `¡Claro! Navegando a ${action.args.view}... 🚀`;
-      
-      case 'getQuickStats':
-         const todaySales = sales.filter(s => new Date(s.timestamp).toDateString() === new Date().toDateString());
-         const total = todaySales.reduce((sum, s) => sum + s.total, 0);
-         return `¡Hoy hemos vendido ${formatPrice(total)} en ${todaySales.length} órdenes! 💪`;
-
-      default:
-        return 'No reconozco esa acción, ¡pero suena interesante!';
-    }
+          const updatedOrder = { ...order, deliveryInfo: updatedInfo };
+          
+          // Sync status with main order status for consistency
+          if (status === 'delivered') updatedOrder.status = 'completed'; 
+          
+          handleCreateOrder(updatedOrder);
+      }
   };
-
-  if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-900 text-white"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-red-500"></div></div>;
-  if (!currentUser) return <Login onLogin={handleLogin} error={loginError} settings={printerSettings} />;
-  
-  // --- PERMISSIONS ---
-  let currentPermissions: Permission[] = [];
-  if (currentUser.roleId === 'role-admin' || currentUser.username === 'admin' || currentUser.username === 'master') {
-      currentPermissions = AVAILABLE_PERMISSIONS.map(p => p.key);
-  } else {
-      const currentRole = roles.find(r => r.id === currentUser.roleId);
-      currentPermissions = currentRole?.permissions || [];
+  const handleSaveDeliveryRate = (rate: Omit<DeliveryRate, 'id'>) => {
+      const newRate = { ...rate, id: generateId('rate'), sedeId: selectedSedeId };
+      setDeliveryRates(prev => [...prev, newRate]);
+      db.insert('delivery_rates', newRate);
+  };
+  const handleDeleteDeliveryRate = (id: string) => {
+      setDeliveryRates(prev => prev.filter(r => r.id !== id));
+      db.delete('delivery_rates', id);
   }
 
-  const currentRoleName = roles.find(r => r.id === currentUser.roleId)?.name || (currentUser.roleId === 'role-admin' ? 'Administrador' : 'Usuario');
-
-  const renderView = () => {
-    switch (currentView) {
-      case 'DASHBOARD': return <Dashboard sales={sales} menuItems={menuItems} tables={tables} users={users} currentUser={currentUser} />;
-      case 'POS': return <POS menuItems={menuItems} tables={tables} zones={zones} createOrder={createOrder} completeSale={completeSale} orders={orders} printerSettings={printerSettings} currentUser={currentUser} initialTableId={selectedTableIdForPos} clearInitialTable={() => setSelectedTableIdForPos(null)} categoryConfigs={categoryConfigs} />;
-      case 'MENU': return <MenuManager menuItems={menuItems} addMenuItem={addMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} inventoryItems={inventoryItems} categoryConfigs={categoryConfigs} updateCategoryConfigs={updateCategoryConfigs} />;
-      case 'TABLES': return <TableManager tables={tables} zones={zones} addTable={addTable} updateTable={updateTable} deleteTable={deleteTable} updateTableStatus={updateTableStatus} addZone={addZone} updateZone={updateZone} deleteZone={deleteZone} onOpenTableInPOS={handleOpenTableInPOS} />;
-      case 'KITCHEN': return <KitchenMonitor orders={orders} updateOrderStatus={updateOrderStatus} tables={tables} sales={sales} inventory={inventoryItems} printerSettings={printerSettings} />;
-      case 'REPORTS': return <Reports sales={sales} tables={tables} zones={zones} users={users} currentUser={currentUser} deleteSale={deleteSale} updateSale={updateSale} />;
-      case 'EXPENSES': return <ExpensesManager expenses={expenses} addExpense={addExpense} updateExpense={updateExpense} deleteExpense={deleteExpense} categories={expenseCategories} saveCategories={saveExpenseCategories} />;
-      case 'WHATSAPP': return <WhatsAppManager orders={orders.filter(o => (o.orderType === 'delivery' || o.orderType === 'to-go') && o.status !== 'completed' && o.status !== 'cancelled')} printerSettings={printerSettings}/>;
-      case 'INVENTORY': return <InventoryManager inventoryItems={inventoryItems} addInventoryItem={addInventoryItem} updateInventoryItem={updateInventoryItem} adjustStock={adjustInventoryItemStock} />;
-      case 'DELIVERY_MANAGER': return <DeliveryManager orders={orders} updateOrderDeliveryStatus={updateOrderDeliveryStatus} printerSettings={printerSettings} deliveryRates={deliveryRates} saveDeliveryRate={saveDeliveryRate} deleteDeliveryRate={deleteDeliveryRate} />;
-      case 'CLIENTS': return <ClientManager customers={customers} sales={sales} addCustomer={addCustomer} updateCustomer={updateCustomer} deleteCustomer={deleteCustomer} loyaltySettings={loyaltySettings} />;
-      case 'SHOPPING': return <ShoppingManager inventoryItems={inventoryItems} sales={sales} menuItems={menuItems} />;
-      case 'LOYALTY': return <LoyaltyManager settings={loyaltySettings} onSave={saveLoyaltySettings} menuItems={menuItems} />;
-      case 'SETTINGS': return <AdminSettings users={users} roles={roles} addUser={addUser} updateUser={updateUser} deleteUser={deleteUser} addRole={addRole} updateRole={updateRole} deleteRole={deleteRole} printerSettings={printerSettings} savePrinterSettings={savePrinterSettings} onFactoryReset={handleFactoryReset} onImportData={handleBulkImport} />;
-      case 'MANUAL': return <UserManual />;
-      case 'MARKETING': return <MarketingManager customers={customers} />;
-      default: return <Dashboard sales={sales} menuItems={menuItems} tables={tables} users={users} currentUser={currentUser} />;
-    }
+  // --- SETTINGS HANDLERS ---
+  const handleSavePrinterSettings = (settings: PrinterSettings) => {
+      setPrinterSettings(settings);
+      db.saveSetting('printer_settings', settings);
+  };
+  const handleUpdateCategoryConfigs = (configs: CategoryConfig[]) => {
+      setCategoryConfigs(configs);
+      db.saveSetting('category_configs', configs);
+  };
+  const handleSaveLoyaltySettings = (settings: LoyaltySettings) => {
+      setLoyaltySettings(settings);
+      db.saveSetting('loyalty_settings', settings);
+  };
+  
+  const handleFactoryReset = async () => {
+      await db.deleteAllData();
+      window.location.reload();
   };
 
+  // --- ADMIN HANDLERS ---
+  const handleAddUser = (user: Omit<User, 'id'>) => {
+      const newUser = { ...user, id: generateId('user') };
+      setUsers(prev => [...prev, newUser]);
+      db.insert('users', newUser);
+  };
+  const handleUpdateUser = (user: User) => {
+      setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+      db.upsert('users', user);
+  };
+  const handleDeleteUser = (id: string) => {
+      setUsers(prev => prev.filter(u => u.id !== id));
+      db.delete('users', id);
+  };
+  
+  const handleAddRole = (role: Omit<Role, 'id'>) => {
+      const newRole = { ...role, id: generateId('role') };
+      setRoles(prev => [...prev, newRole]);
+      db.insert('roles', newRole);
+  };
+  const handleUpdateRole = (role: Role) => {
+      setRoles(prev => prev.map(r => r.id === role.id ? role : r));
+      db.upsert('roles', role);
+  };
+  const handleDeleteRole = (id: string) => {
+      setRoles(prev => prev.filter(r => r.id !== id));
+      db.delete('roles', id);
+  };
+
+  const handleAddSede = (sede: Omit<Sede, 'id'>) => {
+      const newSede = { ...sede, id: generateId('sede') };
+      setSedes(prev => [...prev, newSede]);
+      db.insert('sedes', newSede);
+  }
+  const handleUpdateSede = (sede: Sede) => {
+      setSedes(prev => prev.map(s => s.id === sede.id ? sede : s));
+      db.upsert('sedes', sede);
+  }
+  const handleDeleteSede = (id: string) => {
+      setSedes(prev => prev.filter(s => s.id !== id));
+      db.delete('sedes', id);
+  }
+
+  // --- EXPENSE HANDLERS ---
+  const handleAddExpense = async (expense: Omit<Expense, 'id'>, imageFile?: File) => {
+      let imageUrl = undefined;
+      if (imageFile) {
+          const url = await db.uploadReceiptImage(imageFile);
+          if (url) imageUrl = url;
+      }
+      const newExpense = { ...expense, id: generateId('exp'), imageUrl, sedeId: selectedSedeId };
+      setExpenses(prev => [...prev, newExpense]);
+      db.insert('expenses', newExpense);
+  };
+  const handleUpdateExpense = async (expense: Expense, imageFile?: File, removeImage?: boolean) => {
+      let imageUrl = expense.imageUrl;
+      
+      if (removeImage && expense.imageUrl) {
+          await db.deleteReceiptImage(expense.imageUrl);
+          imageUrl = undefined;
+      }
+      
+      if (imageFile) {
+          const url = await db.uploadReceiptImage(imageFile);
+          if (url) imageUrl = url;
+      }
+
+      const updatedExpense = { ...expense, imageUrl };
+      setExpenses(prev => prev.map(e => e.id === expense.id ? updatedExpense : e));
+      db.upsert('expenses', updatedExpense);
+  };
+  const handleDeleteExpense = (id: string) => {
+      const expense = expenses.find(e => e.id === id);
+      if (expense?.imageUrl) {
+          db.deleteReceiptImage(expense.imageUrl);
+      }
+      setExpenses(prev => prev.filter(e => e.id !== id));
+      db.delete('expenses', id);
+  };
+  const handleSaveExpenseCategories = (categories: string[]) => {
+      setExpenseCategories(categories);
+      db.saveSetting('expense_categories', categories);
+  };
+
+  const handleImportData = (type: 'menu' | 'inventory', data: any[]) => {
+      if (type === 'menu') {
+          const newItems = data.map(item => ({
+              ...item,
+              id: generateId('menu'),
+              sedeId: selectedSedeId === 'global' ? null : selectedSedeId
+          }));
+          setMenuItems(prev => [...prev, ...newItems]);
+          db.bulkUpsert('menu_items', newItems);
+      } else {
+          const newItems = data.map(item => ({
+              ...item,
+              id: generateId('inv'),
+              sedeId: selectedSedeId
+          }));
+          setInventory(prev => [...prev, ...newItems]);
+          db.bulkUpsert('inventory', newItems);
+      }
+  };
+
+  // --- PROFE LOCO ACTION HANDLER ---
+  const handleProfeLocoAction = async (action: ProfeLocoAction): Promise<string> => {
+      switch(action.name) {
+          case 'addExpense':
+              handleAddExpense({
+                  description: action.args.description,
+                  amount: action.args.amount,
+                  category: action.args.category,
+                  date: new Date().toISOString(),
+                  sedeId: selectedSedeId
+              });
+              return `Gasto de ${formatPrice(action.args.amount)} registrado en ${action.args.category}.`;
+          
+          case 'addInventoryItem':
+              handleAddInventoryItem({
+                  name: action.args.name,
+                  stock: action.args.stock,
+                  unit: action.args.unit,
+                  cost: action.args.cost,
+                  alertThreshold: action.args.alertThreshold,
+                  sedeId: selectedSedeId
+              });
+              return `Producto ${action.args.name} añadido al inventario.`;
+          
+          case 'navigateToView':
+              setCurrentView(action.args.view as View);
+              return `Navegando a ${action.args.view}...`;
+          
+          case 'getQuickStats':
+              const todaySales = sales.filter(s => new Date(s.timestamp).toDateString() === new Date().toDateString());
+              const total = todaySales.reduce((acc, s) => acc + s.total, 0);
+              return `Hoy llevamos ${todaySales.length} ventas por un total de ${formatPrice(total)}.`;
+              
+          default:
+              return "Acción no reconocida.";
+      }
+  };
+
+  // --- PERMISSIONS CHECK ---
+  const currentUserRole = roles.find(r => r.id === currentUser?.roleId);
+  const userPermissions = currentUserRole?.permissions || [];
+  const isAdmin = currentUserRole?.isSystem || false;
+
+  const checkPermission = (permission: any) => {
+      if (isAdmin) return true;
+      return userPermissions.includes(permission);
+  };
+
+  if (isLoading) {
+      return (
+          <div className="min-h-screen bg-[var(--black-bg)] flex items-center justify-center">
+              <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[var(--primary-red)] mx-auto mb-4"></div>
+                  <p className="text-white font-bangers text-xl tracking-wide">Cargando Sistema...</p>
+              </div>
+          </div>
+      );
+  }
+
+  if (!currentUser) {
+    return <Login onLogin={handleLogin} error={loginError} settings={printerSettings} />;
+  }
+
+  // Filter Data based on Sede (except for Admin Global View)
+  const filteredOrders = selectedSedeId === 'global' ? orders : orders.filter(o => o.sedeId === selectedSedeId);
+  const filteredSales = selectedSedeId === 'global' ? sales : sales.filter(s => s.sedeId === selectedSedeId);
+  const filteredInventory = selectedSedeId === 'global' ? inventory : inventory.filter(i => i.sedeId === selectedSedeId);
+  const filteredCustomers = selectedSedeId === 'global' ? customers : customers.filter(c => c.sedeId === selectedSedeId);
+  const filteredExpensesData = selectedSedeId === 'global' ? expenses : expenses.filter(e => e.sedeId === selectedSedeId);
+  // Menu items: Show Master (null) + Sede Specific
+  const filteredMenu = selectedSedeId === 'global' 
+    ? menuItems 
+    : menuItems.filter(i => i.sedeId === null || i.sedeId === selectedSedeId);
+  const filteredTables = selectedSedeId === 'global' ? tables : tables.filter(t => t.sedeId === selectedSedeId);
+  const filteredZones = selectedSedeId === 'global' ? zones : zones.filter(z => z.sedeId === selectedSedeId);
+
   return (
-    <>
-      <div className="flex h-screen bg-[var(--black-bg)] text-gray-100">
-        <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-[var(--card-bg)] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out md:relative md:translate-x-0 border-r border-[var(--card-border)]`}>
-          <Sidebar currentView={currentView} setCurrentView={setCurrentView} closeSidebar={() => setSidebarOpen(false)} permissions={currentPermissions} onLogout={handleLogout} userName={currentUser.name} roleName={currentRoleName} isOnline={isOnline} settings={printerSettings} />
-        </div>
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="flex justify-between items-center p-4 bg-[var(--card-bg)] border-b border-[var(--card-border)] md:hidden">
-            <h1 className="text-2xl font-bangers tracking-wider uppercase">{printerSettings.shopName}</h1>
-            <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="text-gray-400 focus:outline-none">{isSidebarOpen ? <XIcon /> : <MenuIcon />}</button>
-          </header>
-          <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 md:p-8">
-            {renderView()}
-          </main>
-        </div>
+    <div className="flex h-screen overflow-hidden bg-[var(--black-bg)] text-white font-sans">
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`fixed inset-y-0 left-0 w-64 bg-[var(--card-bg)] transform transition-transform duration-300 ease-in-out z-40 md:relative md:translate-x-0 border-r border-[var(--card-border)] ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <Sidebar 
+            currentView={currentView} 
+            setCurrentView={setCurrentView} 
+            closeSidebar={() => setSidebarOpen(false)}
+            permissions={userPermissions}
+            onLogout={handleLogout}
+            userName={currentUser.name}
+            roleName={currentUserRole?.name || 'Usuario'}
+            isOnline={isOnline}
+            settings={printerSettings}
+            isAdmin={isAdmin}
+            sedes={sedes}
+            selectedSedeId={selectedSedeId}
+            setSelectedSedeId={setSelectedSedeId}
+        />
       </div>
-      {orderForTicket && <KitchenTicketModal order={orderForTicket} onClose={() => setOrderForTicket(null)} tables={tables} printerSettings={printerSettings} />}
-      <button onClick={() => setChatbotOpen(true)} className="fixed bottom-6 right-6 bg-gradient-to-br from-purple-600 to-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform z-40" aria-label="Abrir Entrenador IA"><BrainCircuitIcon className="w-8 h-8"/></button>
-      <Chatbot 
-        isOpen={isChatbotOpen} 
-        onClose={() => setChatbotOpen(false)}
-        onExecuteAction={handleChatbotAction}
-      />
-    </>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Mobile Header */}
+        <header className="md:hidden bg-[var(--card-bg)] p-4 flex justify-between items-center border-b border-[var(--card-border)] z-20 shadow-md">
+          <button onClick={() => setSidebarOpen(true)} className="text-white p-2 rounded-lg hover:bg-white/10">
+            <MenuIcon />
+          </button>
+          <h1 className="text-xl font-bangers tracking-wider text-white">{printerSettings.shopName}</h1>
+          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+        </header>
+
+        <main className="flex-1 overflow-auto p-4 md:p-6 relative">
+            {currentView === 'DASHBOARD' && checkPermission('VIEW_DASHBOARD') && (
+                <Dashboard 
+                    sales={filteredSales} 
+                    menuItems={filteredMenu} 
+                    tables={filteredTables} 
+                    users={users} 
+                    currentUser={currentUser}
+                    sedes={sedes}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'POS' && checkPermission('POS_ACCESS') && (
+                <POS 
+                    menuItems={filteredMenu} 
+                    tables={filteredTables} 
+                    zones={filteredZones}
+                    orders={filteredOrders} 
+                    createOrder={handleCreateOrder}
+                    completeSale={handleCompleteSale}
+                    printerSettings={printerSettings}
+                    currentUser={currentUser}
+                    initialTableId={selectedTableIdForPos}
+                    clearInitialTable={() => setSelectedTableIdForPos(null)}
+                    categoryConfigs={categoryConfigs}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'KITCHEN' && checkPermission('KITCHEN_MONITOR') && (
+                <KitchenMonitor 
+                    orders={filteredOrders} 
+                    updateOrderStatus={handleUpdateOrderStatus} 
+                    tables={filteredTables} 
+                    sales={filteredSales}
+                    inventory={filteredInventory}
+                    printerSettings={printerSettings}
+                    sedes={sedes}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'MENU' && checkPermission('MANAGE_MENU') && (
+                <MenuManager 
+                    menuItems={filteredMenu} 
+                    addMenuItem={handleAddMenuItem} 
+                    updateMenuItem={handleUpdateMenuItem} 
+                    deleteMenuItem={handleDeleteMenuItem} 
+                    inventoryItems={filteredInventory}
+                    categoryConfigs={categoryConfigs}
+                    updateCategoryConfigs={handleUpdateCategoryConfigs}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'TABLES' && checkPermission('MANAGE_TABLES') && (
+                <TableManager 
+                    tables={filteredTables} 
+                    zones={filteredZones}
+                    addTable={handleAddTable} 
+                    updateTable={handleUpdateTable} 
+                    deleteTable={handleDeleteTable}
+                    updateTableStatus={handleUpdateTableStatus}
+                    addZone={handleAddZone}
+                    updateZone={handleUpdateZone}
+                    deleteZone={handleDeleteZone}
+                    onOpenTableInPOS={(tableId) => {
+                        setSelectedTableIdForPos(tableId);
+                        setCurrentView('POS');
+                    }}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'INVENTORY' && checkPermission('MANAGE_INVENTORY') && (
+                <InventoryManager 
+                    inventoryItems={filteredInventory} 
+                    addInventoryItem={handleAddInventoryItem} 
+                    updateInventoryItem={handleUpdateInventoryItem}
+                    adjustStock={handleAdjustStock}
+                />
+            )}
+            {currentView === 'SHOPPING' && checkPermission('MANAGE_SHOPPING_LIST') && (
+                <ShoppingManager 
+                    inventoryItems={filteredInventory}
+                    sales={filteredSales}
+                    menuItems={filteredMenu}
+                />
+            )}
+            {currentView === 'REPORTS' && checkPermission('VIEW_REPORTS') && (
+                <Reports sales={filteredSales} />
+            )}
+            {currentView === 'DELIVERY_MANAGER' && checkPermission('DELIVERY_MANAGER') && (
+                <DeliveryManager 
+                    orders={filteredOrders} 
+                    updateOrderDeliveryStatus={handleUpdateOrderDeliveryStatus}
+                    printerSettings={printerSettings}
+                    deliveryRates={deliveryRates}
+                    saveDeliveryRate={handleSaveDeliveryRate}
+                    deleteDeliveryRate={handleDeleteDeliveryRate}
+                />
+            )}
+            {currentView === 'WHATSAPP' && checkPermission('DELIVERY_MANAGER') && (
+                <WhatsAppManager orders={filteredOrders} printerSettings={printerSettings} />
+            )}
+            {currentView === 'CLIENTS' && checkPermission('MANAGE_CLIENTS') && (
+                <ClientManager 
+                    customers={filteredCustomers}
+                    sales={filteredSales}
+                    addCustomer={handleAddCustomer}
+                    updateCustomer={handleUpdateCustomer}
+                    deleteCustomer={handleDeleteCustomer}
+                    loyaltySettings={loyaltySettings}
+                />
+            )}
+            {currentView === 'LOYALTY' && checkPermission('MANAGE_LOYALTY') && (
+                <LoyaltyManager 
+                    settings={loyaltySettings}
+                    onSave={handleSaveLoyaltySettings}
+                    menuItems={filteredMenu}
+                />
+            )}
+            {currentView === 'EXPENSES' && checkPermission('MANAGE_EXPENSES') && (
+                <ExpensesManager 
+                    expenses={filteredExpensesData}
+                    addExpense={handleAddExpense}
+                    updateExpense={handleUpdateExpense}
+                    deleteExpense={handleDeleteExpense}
+                    categories={expenseCategories}
+                    saveCategories={handleSaveExpenseCategories}
+                />
+            )}
+            {currentView === 'MARKETING' && checkPermission('MANAGE_MARKETING') && (
+                <MarketingManager customers={filteredCustomers} />
+            )}
+            {currentView === 'QR_MANAGER' && checkPermission('MANAGE_QR') && (
+                <QrManager settings={printerSettings} onSaveSettings={handleSavePrinterSettings} />
+            )}
+            {currentView === 'SETTINGS' && checkPermission('MANAGE_SETTINGS') && (
+                <AdminSettings 
+                    users={users}
+                    roles={roles}
+                    sedes={sedes}
+                    addUser={handleAddUser}
+                    updateUser={handleUpdateUser}
+                    deleteUser={handleDeleteUser}
+                    addRole={handleAddRole}
+                    updateRole={handleUpdateRole}
+                    deleteRole={handleDeleteRole}
+                    addSede={handleAddSede}
+                    updateSede={handleUpdateSede}
+                    deleteSede={handleDeleteSede}
+                    printerSettings={printerSettings}
+                    savePrinterSettings={handleSavePrinterSettings}
+                    onFactoryReset={handleFactoryReset}
+                    onImportData={handleImportData}
+                    selectedSedeId={selectedSedeId}
+                />
+            )}
+            {currentView === 'MANUAL' && <UserManual />}
+        </main>
+
+        {/* Global Components */}
+        <button 
+            onClick={() => setChatbotOpen(true)} 
+            className="fixed bottom-6 right-6 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white p-4 rounded-full shadow-2xl z-50 transition-transform hover:scale-110 border-2 border-white/20 animate-pulse-slow"
+            title="Asistente IA"
+        >
+            <BrainCircuitIcon className="w-8 h-8" />
+        </button>
+        
+        <Chatbot 
+            isOpen={isChatbotOpen} 
+            onClose={() => setChatbotOpen(false)} 
+            onExecuteAction={handleProfeLocoAction}
+        />
+      </div>
+    </div>
   );
 };
-
-const App: React.FC = () => (
-    <ErrorBoundary>
-        <AppContent />
-    </ErrorBoundary>
-);
 
 export default App;

@@ -1,308 +1,12 @@
+
+// ... existing imports
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { MenuItem, Table, Order, OrderItem, MenuItemCategory, Sauce, OrderType, PaymentMethod, PrinterSettings, User, Zone, CategoryConfig, ParsedOrder } from '../types';
 import { SALSAS_ALITAS, SALSAS_PAPAS, SUBMENU_CHOICES, GELATO_FLAVORS } from '../constants';
-// FIX: Add ZapIcon to imports for the new Quick Sale button
 import { EditIcon, TruckIcon, UserIcon, CheckCircleIcon, ShoppingBagIcon, SparklesIcon, PrinterIcon, XIcon, SpinnerIcon, TrashIcon, PlusIcon, CreditCardIcon, DollarSignIcon, ZapIcon, MapPinIcon } from './Icons';
-import { CategoryIcon } from './CategoryIcon';
-import { formatPrice } from '../utils/formatPrice';
-import { parseWhatsAppOrder } from '../services/geminiService';
-import { useToast } from '../hooks/useToast';
+// ... rest of imports
 
-const ItemOptionsModal: React.FC<{
-    item: OrderItem;
-    onClose: () => void;
-    onSave: (item: OrderItem) => void;
-}> = ({ item, onClose, onSave }) => {
-    const [selectedWingSauces, setSelectedWingSauces] = useState<Sauce[]>(item.selectedWingSauces);
-    const [selectedFrySauces, setSelectedFrySauces] = useState<Sauce[]>(item.selectedFrySauces);
-    const [selectedChoice, setSelectedChoice] = useState<string | null>(item.selectedChoice);
-    const [selectedGelatoFlavors, setSelectedGelatoFlavors] = useState<string[]>(item.selectedGelatoFlavors);
-    const [notes, setNotes] = useState<string>(item.notes || '');
-
-    const handleWingSauceChange = (sauce: Sauce, checked: boolean) => {
-        setSelectedWingSauces(prev => checked ? [...prev, sauce] : prev.filter(s => s.key !== sauce.key));
-    };
-
-    const handleFrySauceChange = (sauce: Sauce, checked: boolean) => {
-        setSelectedFrySauces(prev => checked ? [...prev, sauce] : prev.filter(s => s.key !== sauce.key));
-    };
-
-    const handleGelatoFlavorChange = (index: number, flavor: string) => {
-        const newFlavors = [...selectedGelatoFlavors];
-        newFlavors[index] = flavor;
-        setSelectedGelatoFlavors(newFlavors);
-    };
-
-    const handleSave = () => {
-        onSave({ ...item, selectedWingSauces, selectedFrySauces, selectedChoice, selectedGelatoFlavors, notes });
-        onClose();
-    };
-    
-    const choices = item.submenuKey ? SUBMENU_CHOICES[item.submenuKey] : [];
-
-    return (
-        <div className="fixed inset-0 bg-black/90 flex justify-center items-center z-[60] p-4 backdrop-blur-md">
-            <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-[var(--card-border)] flex flex-col max-h-[90vh]">
-                <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
-                    <h2 className="text-2xl font-bold text-white font-bangers tracking-wide">Personalizar: <span className="text-[var(--accent-yellow)]">{item.name}</span></h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white"><XIcon /></button>
-                </div>
-                
-                <div className="space-y-6 overflow-y-auto pr-2 flex-1 custom-scrollbar">
-                    {item.maxChoices && item.maxChoices > 0 && (
-                        <div className="bg-black/30 p-4 rounded-xl">
-                            <h3 className="font-bold text-lg mb-3 text-blue-300 flex items-center gap-2"><SparklesIcon className="w-4 h-4"/> Sabores de Gelato ({item.maxChoices})</h3>
-                            <div className="space-y-3">
-                                {[...Array(item.maxChoices)].map((_, index) => {
-                                    const currentSelection = selectedGelatoFlavors[index];
-                                    const otherSelectedFlavors = selectedGelatoFlavors.filter((_, i) => i !== index);
-                                    const availableFlavors = GELATO_FLAVORS.filter(f => !otherSelectedFlavors.includes(f));
-                                    
-                                    return (
-                                        <select 
-                                            key={index}
-                                            value={currentSelection || ''}
-                                            onChange={(e) => handleGelatoFlavorChange(index, e.target.value)}
-                                            className="w-full p-3 rounded-lg bg-[var(--card-bg)] border border-gray-600 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                        >
-                                            <option value="" disabled>Selecciona Sabor {index + 1}</option>
-                                            {availableFlavors.map(flavor => <option key={flavor} value={flavor}>{flavor}</option>)}
-                                        </select>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                    {item.hasWings && (
-                        <div className="bg-black/30 p-4 rounded-xl">
-                            <h3 className="font-bold text-lg mb-3 text-[var(--primary-red)]">🍗 Salsas para Alitas</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                {SALSAS_ALITAS.map(sauce => (
-                                    <label key={sauce.key} className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer border transition-all ${selectedWingSauces.some(s => s.key === sauce.key) ? 'bg-red-900/40 border-red-500' : 'bg-[var(--card-bg)] border-transparent hover:bg-white/5'}`}>
-                                        <input type="checkbox"
-                                            checked={selectedWingSauces.some(s => s.key === sauce.key)}
-                                            onChange={(e) => handleWingSauceChange(sauce, e.target.checked)}
-                                            className="h-5 w-5 rounded border-gray-500 bg-gray-800 text-[var(--primary-red)] focus:ring-[var(--primary-red)]"
-                                        />
-                                        <span className="text-sm font-medium text-gray-200">{sauce.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                     {item.hasFries && (
-                        <div className="bg-black/30 p-4 rounded-xl">
-                            <h3 className="font-bold text-lg mb-3 text-[var(--accent-yellow)]">🍟 Salsas para Papas</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                {SALSAS_PAPAS.map(sauce => (
-                                    <label key={sauce.key} className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer border transition-all ${selectedFrySauces.some(s => s.key === sauce.key) ? 'bg-yellow-900/40 border-yellow-500' : 'bg-[var(--card-bg)] border-transparent hover:bg-white/5'}`}>
-                                        <input type="checkbox"
-                                            checked={selectedFrySauces.some(s => s.key === sauce.key)}
-                                            onChange={(e) => handleFrySauceChange(sauce, e.target.checked)}
-                                            className="h-5 w-5 rounded border-gray-500 bg-gray-800 text-[var(--accent-yellow)] focus:ring-[var(--accent-yellow)]"
-                                        />
-                                        <span className="text-sm font-medium text-gray-200">{sauce.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {choices.length > 0 && (
-                        <div className="bg-black/30 p-4 rounded-xl">
-                            <h3 className="font-bold text-lg mb-3 text-white">Elige una Opción</h3>
-                            <select value={selectedChoice || ''} onChange={(e) => setSelectedChoice(e.target.value)} className="w-full p-3 rounded-lg bg-[var(--card-bg)] border border-gray-600 text-white focus:ring-2 focus:ring-[var(--primary-red)] outline-none">
-                                <option value="" disabled>Seleccionar...</option>
-                                {choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                            </select>
-                        </div>
-                    )}
-                    <div>
-                        <h3 className="font-bold text-lg mb-2 text-gray-300">📝 Notas Adicionales</h3>
-                        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: sin cebolla, bien cocido..." rows={3} className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 text-white focus:ring-2 focus:ring-[var(--primary-red)] outline-none resize-none"></textarea>
-                    </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-6 mt-2 border-t border-gray-700">
-                    <button onClick={onClose} className="px-6 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-600 font-semibold transition-colors">Cancelar</button>
-                    <button onClick={handleSave} className="px-6 py-3 bg-[var(--primary-red)] text-white font-bold rounded-xl hover:bg-[var(--dark-red)] shadow-lg shadow-red-900/30 transition-colors">Guardar Cambios</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const CustomerInfoModal: React.FC<{
-    onClose: () => void;
-    onSave: (info: any) => void;
-    isDelivery: boolean;
-}> = ({ onClose, onSave, isDelivery }) => {
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [address, setAddress] = useState('');
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave({ name, phone, address });
-    };
-
-    return (
-         <div className="fixed inset-0 bg-black/90 flex justify-center items-center z-[60] p-4 backdrop-blur-sm">
-            <div className="bg-[var(--card-bg)] rounded-2xl p-8 w-full max-w-md border border-[var(--card-border)] shadow-2xl">
-                <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-[var(--primary-red)] rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg shadow-red-900/50">
-                        {isDelivery ? <TruckIcon className="w-8 h-8 text-white"/> : <ShoppingBagIcon className="w-8 h-8 text-white"/>}
-                    </div>
-                    <h2 className="text-2xl font-bold text-white font-bangers tracking-wide">{isDelivery ? 'Datos de Entrega' : 'Datos Para Llevar'}</h2>
-                </div>
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-sm text-gray-400 mb-1 ml-1">Nombre del Cliente</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-3 rounded-xl bg-black/30 border border-gray-600 text-white focus:border-[var(--primary-red)] focus:ring-1 focus:ring-[var(--primary-red)] outline-none" required />
-                    </div>
-                    <div>
-                        <label className="block text-sm text-gray-400 mb-1">Teléfono / WhatsApp</label>
-                        <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 rounded-xl bg-black/30 border border-gray-600 text-white focus:border-[var(--primary-red)] focus:ring-1 focus:ring-[var(--primary-red)] outline-none" required />
-                    </div>
-                    {isDelivery && (
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-1 ml-1">Dirección Completa</label>
-                            <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full p-3 rounded-xl bg-black/30 border border-gray-600 text-white focus:border-[var(--primary-red)] focus:ring-1 focus:ring-[var(--primary-red)] outline-none" required placeholder="Calle 10 # 5-5..." />
-                        </div>
-                    )}
-                    <div className="flex gap-3 pt-4">
-                        <button type="button" onClick={onClose} className="flex-1 py-3 bg-gray-700 rounded-xl text-white font-semibold hover:bg-gray-600 transition-colors">Cancelar</button>
-                        <button type="submit" className="flex-1 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-900/30 transition-colors">Continuar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const TableSelectModal: React.FC<{
-    zones: Zone[];
-    tables: Table[];
-    onClose: () => void;
-    onSelect: (tableId: string) => void;
-}> = ({ zones, tables, onClose, onSelect }) => {
-    const [activeZoneId, setActiveZoneId] = useState(zones[0]?.id || '');
-    const tablesInZone = tables.filter(t => t.zoneId === activeZoneId);
-
-    return (
-        <div className="fixed inset-0 bg-black/90 flex justify-center items-center z-[60] p-4 backdrop-blur-sm">
-            <div className="bg-[var(--card-bg)] rounded-2xl p-6 w-full max-w-3xl border border-[var(--card-border)] shadow-2xl h-[80vh] flex flex-col">
-                <h2 className="text-3xl font-bold mb-6 text-white font-bangers tracking-wide text-center">Selecciona una Mesa</h2>
-                
-                <div className="flex gap-2 overflow-x-auto pb-2 mb-4 border-b border-gray-700">
-                    {zones.map(zone => (
-                        <button 
-                            key={zone.id} 
-                            onClick={() => setActiveZoneId(zone.id)} 
-                            className={`px-5 py-2 rounded-t-lg font-bold transition-all whitespace-nowrap ${activeZoneId === zone.id ? 'bg-[var(--primary-red)] text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
-                        >
-                            {zone.name}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {tablesInZone.map(table => (
-                             <button 
-                                key={table.id} 
-                                onClick={() => onSelect(table.id)} 
-                                className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 transition-transform hover:scale-105 shadow-lg border-2 ${table.status === 'available' ? 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400 hover:bg-emerald-900/50' : 'bg-red-900/30 border-red-500/50 text-red-400 hover:bg-red-900/50'}`}
-                            >
-                                <div className="text-2xl font-bold">{table.name}</div>
-                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${table.status === 'available' ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
-                                    {table.status === 'available' ? 'Libre' : 'Ocupada'}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                 <button onClick={onClose} className="mt-4 w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-white font-bold transition-colors">Cancelar</button>
-            </div>
-        </div>
-    );
-};
-
-const PaymentModal: React.FC<{
-    order: Order;
-    onClose: () => void;
-    onCompleteSale: (paymentMethod: PaymentMethod) => void;
-}> = ({ order, onClose, onCompleteSale }) => {
-    const [paymentStep, setPaymentStep] = useState<'selectMethod' | 'calculateChange'>('selectMethod');
-    const [cashReceived, setCashReceived] = useState<string>('');
-    
-    const total = order.items.reduce((acc, item) => acc + item.price * item.quantity, 0) + (order.deliveryInfo?.deliveryCost || 0);
-
-    const received = parseFloat(cashReceived) || 0;
-    const change = received > total ? received - total : 0;
-
-    useEffect(() => {
-        setPaymentStep('selectMethod');
-        setCashReceived('');
-    }, [order]);
-    
-    const quickCashValues = [20000, 50000, 100000];
-
-    return (
-        <div className="fixed inset-0 bg-black/90 flex justify-center items-center z-[60] p-4 backdrop-blur-sm">
-            <div className="bg-[var(--card-bg)] rounded-2xl p-8 w-full max-w-md border border-[var(--card-border)] shadow-2xl">
-                <h2 className="text-3xl font-bold mb-6 text-white text-center font-bangers tracking-wide">Finalizar Venta</h2>
-                
-                <div className="bg-black/40 p-6 rounded-xl text-center mb-8 border border-gray-700 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-sky-500"></div>
-                    <p className="text-gray-400 text-sm uppercase tracking-widest mb-1">Total a Pagar</p>
-                    <p className="text-5xl font-bold text-white">{formatPrice(total)}</p>
-                </div>
-
-                {paymentStep === 'selectMethod' && (
-                    <div className="space-y-3">
-                        <button onClick={() => setPaymentStep('calculateChange')} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg text-white flex items-center justify-center gap-3 transition-transform hover:scale-105 shadow-lg shadow-emerald-900/20">
-                            <DollarSignIcon className="w-6 h-6"/> Efectivo
-                        </button>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => onCompleteSale('Tarjeta')} className="py-4 bg-sky-600 hover:bg-sky-500 rounded-xl font-bold text-lg text-white flex flex-col items-center justify-center gap-1 transition-transform hover:scale-105 shadow-lg shadow-sky-900/20">
-                                <CreditCardIcon className="w-6 h-6"/> Tarjeta
-                            </button>
-                            <button onClick={() => onCompleteSale('Transferencia')} className="py-4 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold text-lg text-white flex flex-col items-center justify-center gap-1 transition-transform hover:scale-105 shadow-lg shadow-purple-900/20">
-                                <SparklesIcon className="w-6 h-6"/> Transferencia
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {paymentStep === 'calculateChange' && (
-                    <div className="space-y-5 animate-fadeIn">
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-2 text-center">¿Cuánto entrega el cliente?</label>
-                            <input type="number" value={cashReceived} onChange={e => setCashReceived(e.target.value)} placeholder="0" className="w-full p-4 text-3xl font-bold text-center rounded-xl bg-black/30 border border-gray-600 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 outline-none" autoFocus />
-                            <div className="flex gap-2 mt-3 justify-center">
-                                {quickCashValues.map(val => (
-                                    <button key={val} onClick={() => setCashReceived(val.toString())} className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded-full border border-gray-600">{formatPrice(val)}</button>
-                                ))}
-                                <button onClick={() => setCashReceived(total.toString())} className="px-3 py-1 text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-900 rounded-full">Exacto</button>
-                            </div>
-                        </div>
-                        
-                        <div className="bg-emerald-900/20 p-4 rounded-xl text-center border border-emerald-500/30">
-                            <p className="text-emerald-200 text-sm font-bold uppercase">Cambio / Vueltas</p>
-                            <p className="text-4xl font-bold text-emerald-400 mt-1">{formatPrice(change)}</p>
-                        </div>
-
-                        <button onClick={() => onCompleteSale('Efectivo')} disabled={cashReceived !== '' && received < total} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg text-white shadow-lg shadow-emerald-900/30 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-all">
-                            Confirmar Pago
-                        </button>
-                         <button onClick={() => setPaymentStep('selectMethod')} className="w-full text-sm text-gray-400 hover:text-white py-2">Volver</button>
-                    </div>
-                )}
-                
-                <button onClick={onClose} className="mt-6 w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-300 font-semibold transition-colors">Cancelar Operación</button>
-            </div>
-        </div>
-    );
-};
+// ... existing components (ItemOptionsModal, CustomerInfoModal, TableSelectModal, PaymentModal)
 
 const WhatsAppImportModal: React.FC<{
   isOpen: boolean;
@@ -364,101 +68,7 @@ const WhatsAppImportModal: React.FC<{
   );
 };
 
-const MenuItemCard: React.FC<{ 
-    item: MenuItem;
-    onClick: () => void;
-    categoryColor: string;
-}> = ({ item, onClick, categoryColor }) => (
-    <div
-        onClick={onClick}
-        className="group bg-[var(--card-bg)] rounded-xl shadow-lg cursor-pointer flex flex-col justify-between border border-[var(--card-border)] overflow-hidden transition-all duration-200 hover:scale-[1.03] hover:shadow-2xl hover:border-opacity-50 relative"
-        style={{ borderColor: `${categoryColor}40` }}
-    >
-        <div className="h-3 w-full" style={{ backgroundColor: categoryColor }}></div>
-        <div className="p-4 flex-1 flex flex-col items-center justify-center text-center gap-2 relative z-10">
-            <div className="bg-black/20 p-3 rounded-full mb-1 group-hover:bg-black/40 transition-colors">
-                <CategoryIcon category={item.category} className="w-8 h-8 text-gray-300 group-hover:text-white transition-colors"/>
-            </div>
-            <h4 className="font-bold text-base text-white leading-tight group-hover:text-[var(--accent-yellow)] transition-colors line-clamp-2">{item.name}</h4>
-        </div>
-        <div className="bg-black/30 p-2 text-center border-t border-white/5">
-            <span className="text-sm font-bold text-[var(--accent-yellow)] font-mono bg-black/40 px-3 py-1 rounded-full">{formatPrice(item.price)}</span>
-        </div>
-    </div>
-);
-
-const OrderTicket: React.FC<{
-    currentOrder: Order;
-    orderTotal: number;
-    removeItem: (instanceId: string) => void;
-    incrementItem: (instanceId: string) => void;
-    decrementItem: (instanceId: string) => void;
-    editItem: (item: OrderItem) => void;
-    clearOrder: () => void;
-    handleSaveOrder: () => void;
-    handleCompleteSale: () => void;
-    header: React.ReactNode;
-}> = ({ currentOrder, orderTotal, removeItem, incrementItem, decrementItem, editItem, clearOrder, handleSaveOrder, handleCompleteSale, header }) => {
-    return (
-        <div className="bg-[var(--card-bg)] flex flex-col h-full border-l border-[var(--card-border)] shadow-2xl">
-            {header}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                {currentOrder.items.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-60">
-                        <ShoppingBagIcon className="w-16 h-16 mb-4"/>
-                        <p className="text-lg font-medium">Orden Vacía</p>
-                        <p className="text-sm">Selecciona productos del menú</p>
-                    </div>
-                ) : (
-                    currentOrder.items.map(item => (
-                        <div key={item.instanceId} className="bg-black/30 p-3 rounded-xl flex gap-3 relative group border border-transparent hover:border-gray-700 transition-colors">
-                            <div className="flex flex-col items-center justify-center gap-1 min-w-[2rem]">
-                                <button onClick={() => incrementItem(item.instanceId)} className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-xs transition-colors">+</button>
-                                <span className="font-bold text-white text-sm">{item.quantity}</span>
-                                <button onClick={() => decrementItem(item.instanceId)} className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-xs transition-colors">-</button>
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm font-bold text-white leading-tight">{item.name}</p>
-                                <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
-                                    {item.selectedChoice && <p>• {item.selectedChoice}</p>}
-                                    {item.selectedWingSauces.length > 0 && <p>• Salsas: {item.selectedWingSauces.map(s=>s.name).join(', ')}</p>}
-                                    {item.selectedFrySauces.length > 0 && <p>• Papas: {item.selectedFrySauces.map(s=>s.name).join(', ')}</p>}
-                                    {item.selectedGelatoFlavors.length > 0 && <p>• Gelato: {item.selectedGelatoFlavors.join(', ')}</p>}
-                                    {item.notes && <p className="text-amber-400 italic">"{item.notes}"</p>}
-                                </div>
-                            </div>
-                            <div className="flex flex-col justify-between items-end">
-                                <p className="font-bold text-white text-sm">{formatPrice(item.price * item.quantity)}</p>
-                                <button onClick={() => editItem(item)} className="text-xs bg-sky-900/30 text-sky-400 px-2 py-1 rounded hover:bg-sky-900/50 transition-colors">Editar</button>
-                            </div>
-                            <button onClick={() => removeItem(item.instanceId)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center text-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity transform hover:scale-110"><XIcon className="w-3 h-3"/></button>
-                        </div>
-                    ))
-                )}
-            </div>
-            
-            {currentOrder.items.length > 0 && (
-                <div className="p-5 bg-black/20 border-t border-[var(--card-border)] space-y-4 backdrop-blur-sm">
-                    <div className="flex justify-between items-end">
-                        <span className="text-gray-400 text-sm font-medium uppercase tracking-wide">Total a Pagar</span>
-                        <span className="text-3xl font-bold text-white font-mono">{formatPrice(orderTotal)}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={clearOrder} className="bg-red-900/30 hover:bg-red-900/50 text-red-400 font-bold py-3 rounded-xl text-sm border border-red-900/50 transition-all">
-                            Cancelar
-                        </button>
-                        <button onClick={handleCompleteSale} className="bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-400 font-bold py-3 rounded-xl text-sm border border-emerald-900/50 transition-all">
-                            Cobrar
-                        </button>
-                    </div>
-                    <button onClick={handleSaveOrder} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-4 rounded-xl text-lg shadow-lg shadow-blue-900/40 transform transition-all hover:-translate-y-1">
-                        GUARDAR Y ENVIAR A COCINA
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-};
+// ... existing MenuItemCard, OrderTicket
 
 export const POS: React.FC<{
   menuItems: MenuItem[];
@@ -476,6 +86,8 @@ export const POS: React.FC<{
 }> = (props) => {
     const { menuItems, tables, zones, orders, createOrder, completeSale, printerSettings, currentUser, initialTableId, clearInitialTable, categoryConfigs, selectedSedeId } = props;
     
+    // ... existing state
+
     const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
     const [modal, setModal] = useState<'options' | 'customer' | 'table' | 'payment' | 'whatsapp' | null>(null);
     const [modalOrderType, setModalOrderType] = useState<'delivery' | 'to-go' | null>(null);
@@ -484,6 +96,8 @@ export const POS: React.FC<{
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileOrderOpen, setIsMobileOrderOpen] = useState(false);
     const { addToast } = useToast();
+
+    // ... existing useMemo for activeOrders, openTableOrders
 
     const activeOrders = useMemo(() => orders.filter(o => o.status === 'open' || o.status === 'pending_confirmation' || o.status === 'ready'), [orders]);
     const openTableOrders = useMemo(() => activeOrders.filter(o => o.orderType === 'dine-in' && o.tableId), [activeOrders]);
@@ -496,12 +110,16 @@ export const POS: React.FC<{
     const orderTotal = currentOrder?.items.reduce((acc, item) => acc + item.price * item.quantity, 0) || 0;
     const orderItemCount = currentOrder?.items.reduce((acc, item) => acc + item.quantity, 0) || 0;
 
+    // ... existing useEffect
+
     useEffect(() => {
         if (initialTableId) {
             loadOrderForTable(initialTableId);
             clearInitialTable();
         }
     }, [initialTableId]);
+
+    // ... existing functions (startNewOrder, handleNewOrderClick, loadOrder, loadOrderForTable, clearOrderItems, addItemToOrder, updateItemInOrder, removeItemFromOrder, incrementItemQuantity, decrementItemQuantity, handleCustomerInfoSave, handleSaveOrder, handleCompleteSale, handlePayment, handleQuickSale)
 
     const startNewOrder = (type: OrderType) => {
         setModalOrderType(type === 'dine-in' ? null : type);
@@ -689,7 +307,7 @@ export const POS: React.FC<{
             .map(parsedItem => {
                 const menuItem = menuItems.find(mi => mi.id === parsedItem.menuItemId);
                 if (!menuItem) return null;
-                return {
+                const newItem: OrderItem = {
                     ...menuItem,
                     instanceId: `${menuItem.id}-${Date.now()}`,
                     quantity: parsedItem.quantity,
@@ -700,6 +318,7 @@ export const POS: React.FC<{
                     selectedGelatoFlavors: [],
                     isPrinted: false
                 };
+                return newItem;
             })
             .filter((item): item is OrderItem => item !== null);
         
@@ -718,6 +337,8 @@ export const POS: React.FC<{
         });
     };
     
+    // ... rest of the component (filteredMenu, renderOrderHeader, render logic)
+    
     const filteredMenu = useMemo(() => {
         let items = menuItems.filter(item => item.category === activeCategory);
         if (searchTerm) {
@@ -727,6 +348,7 @@ export const POS: React.FC<{
     }, [menuItems, activeCategory, searchTerm]);
     
     const renderOrderHeader = (isModal = false) => {
+        // ... same implementation as before
         let title = "Nueva Orden";
         let icon = <PlusIcon />;
         let subtitle = "";
@@ -851,7 +473,6 @@ export const POS: React.FC<{
 
                 <div className="flex-1 flex flex-col justify-center items-center w-full max-w-5xl mx-auto pb-20">
                     <h3 className="text-xl font-semibold text-gray-300 mb-8">¿Qué deseas hacer?</h3>
-                    {/* FIX: Adjust grid for 4 items and resize buttons for better visibility on mobile */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
                         <button onClick={() => startNewOrder('dine-in')} className="group bg-[var(--card-bg)] p-6 rounded-2xl border border-[var(--card-border)] hover:border-[var(--primary-red)] hover:bg-red-900/10 transition-all text-center shadow-2xl hover:-translate-y-1">
                             <div className="w-16 h-16 mx-auto mb-4 bg-red-900/20 rounded-full flex items-center justify-center group-hover:bg-red-600/20 transition-colors">

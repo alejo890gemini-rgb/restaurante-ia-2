@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { getProfeLocoActionOrResponse } from '../services/geminiService';
 import { XIcon, SendIcon, BrainCircuitIcon, MicIcon, WaveIcon } from './Icons';
@@ -51,10 +52,10 @@ export const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, onExecuteActi
         setIsLoading(true);
 
         try {
-            const chatHistory = messages.map(m => ({
-                role: m.role === 'bot' ? 'model' : 'user',
+            const chatHistory = messages.slice(1).map(m => ({
+                role: (m.role === 'bot' ? 'model' : 'user') as 'user' | 'model',
                 parts: [{ text: m.text }]
-            })).slice(1); // Exclude initial greeting
+            }));
 
             const response = await getProfeLocoActionOrResponse(query, chatHistory);
             

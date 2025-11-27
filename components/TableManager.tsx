@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Table, TableStatus, Zone } from '../types';
 import { PlusIcon, TrashIcon, EditIcon } from './Icons';
 import { useToast } from '../hooks/useToast';
@@ -37,7 +37,8 @@ const TableFormModal: React.FC<{
     onSave: (table: Omit<Table, 'status'>) => void;
     tableToEdit: Omit<Table, 'status'> | null;
     currentZoneId: string;
-}> = ({ isOpen, onClose, onSave, tableToEdit, currentZoneId }) => {
+    selectedSedeId: string;
+}> = ({ isOpen, onClose, onSave, tableToEdit, currentZoneId, selectedSedeId }) => {
     const [name, setName] = useState('');
     const [capacity, setCapacity] = useState('');
 
@@ -58,7 +59,7 @@ const TableFormModal: React.FC<{
             name,
             capacity: parseInt(capacity, 10) || 0,
             zoneId: tableToEdit ? tableToEdit.zoneId : currentZoneId,
-            sedeId: tableToEdit ? tableToEdit.sedeId : '', // sedeId will be injected by parent
+            sedeId: tableToEdit ? tableToEdit.sedeId : selectedSedeId, // Fix: Use selectedSedeId for new tables
         });
         onClose();
     };
@@ -87,7 +88,8 @@ const ZoneFormModal: React.FC<{
     onClose: () => void;
     onSave: (zone: any) => void;
     zoneToEdit: Zone | null;
-}> = ({ isOpen, onClose, onSave, zoneToEdit }) => {
+    selectedSedeId: string;
+}> = ({ isOpen, onClose, onSave, zoneToEdit, selectedSedeId }) => {
     const [name, setName] = useState('');
 
     useEffect(() => {
@@ -100,7 +102,7 @@ const ZoneFormModal: React.FC<{
         onSave({
             id: zoneToEdit?.id,
             name,
-            sedeId: zoneToEdit?.sedeId || ''
+            sedeId: zoneToEdit?.sedeId || selectedSedeId // Fix: Use selectedSedeId for new zones
         });
         onClose();
     }
@@ -171,7 +173,6 @@ const TableCard: React.FC<{
 };
 
 export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTable, updateTable, deleteTable, updateTableStatus, addZone, updateZone, deleteZone, onOpenTableInPOS, selectedSedeId }) => {
-  const [view, setView] = useState<'grid' | 'map'>('grid');
   const [activeZoneId, setActiveZoneId] = useState<string>(zones[0]?.id || '');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -181,9 +182,6 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
   const [zoneToEdit, setZoneToEdit] = useState<Zone | null>(null);
 
   const { addToast } = useToast();
-  
-  const [draggingTable, setDraggingTable] = useState<string | null>(null);
-  const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
       if (!zones.find(z => z.id === activeZoneId) && zones.length > 0) {
@@ -191,44 +189,6 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
       }
   }, [zones, activeZoneId]);
 
-  const handleDragStart = (e: React.MouseEvent<HTMLDivElement>, tableId: string) => {
-    e.preventDefault();
-    setDraggingTable(tableId);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!draggingTable || !mapRef.current) return;
-    const mapBounds = mapRef.current.getBoundingClientRect();
-    const x = e.clientX - mapBounds.left;
-    const y = e.clientY - mapBounds.top;
-    const tableElement = document.getElementById(`map-table-${draggingTable}`);
-    if(tableElement) {
-        tableElement.style.left = `${x}px`;
-        tableElement.style.top = `${y}px`;
-    }
-  };
-
-  const handleMouseUp = (e: MouseEvent) => {
-    if (!draggingTable || !mapRef.current) return;
-    const mapBounds = mapRef.current.getBoundingClientRect();
-    const x = e.clientX - mapBounds.left;
-    const y = e.clientY - mapBounds.top;
-    const tableToUpdate = tables.find(t => t.id === draggingTable);
-    if(tableToUpdate) updateTable({ ...tableToUpdate, x, y });
-    setDraggingTable(null);
-  };
-
-  useEffect(() => {
-    if (view === 'map') {
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [draggingTable, view]);
-  
   const openAddModal = () => {
     if (selectedSedeId === 'global') {
         addToast('Selecciona una sede para añadir mesas.', 'error');
@@ -254,6 +214,7 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
   };
 
   const handleDeleteTable = (tableId: string) => { if (window.confirm("¿Eliminar esta mesa?")) deleteTable(tableId); };
+  
   const openAddZoneModal = () => {
       if (selectedSedeId === 'global') {
         addToast('Selecciona una sede para añadir salones.', 'error');
@@ -288,8 +249,21 @@ export const TableManager: React.FC<TableManagerProps> = ({ tables, zones, addTa
 
   return (
     <div>
-      <TableFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTable} tableToEdit={tableToEdit} currentZoneId={activeZoneId} />
-      <ZoneFormModal isOpen={isZoneModalOpen} onClose={() => setIsZoneModalOpen(false)} onSave={handleSaveZone} zoneToEdit={zoneToEdit} />
+      <TableFormModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSave={handleSaveTable} 
+        tableToEdit={tableToEdit} 
+        currentZoneId={activeZoneId} 
+        selectedSedeId={selectedSedeId}
+      />
+      <ZoneFormModal 
+        isOpen={isZoneModalOpen} 
+        onClose={() => setIsZoneModalOpen(false)} 
+        onSave={handleSaveZone} 
+        zoneToEdit={zoneToEdit} 
+        selectedSedeId={selectedSedeId}
+      />
 
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-white">Gestión de Mesas</h2>

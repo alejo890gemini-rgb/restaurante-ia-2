@@ -6,7 +6,7 @@ import { RestauranteIAIcon } from './Icons';
 import type { PrinterSettings } from '../types';
 
 interface LoginProps {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => boolean | Promise<boolean>;
   error: string;
   settings?: PrinterSettings; // Pass settings for branding
 }

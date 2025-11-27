@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// FIX: Import ProfeLocoResponse directly from types.ts, not from geminiService.
 import type { Sale, User, MenuItem, ProfeLocoResponse } from '../types';
 import { getProfeLocoTip } from '../services/geminiService';
 import { BrainCircuitIcon, RefreshIcon } from './Icons';

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { 
   Chart as ChartJS, 

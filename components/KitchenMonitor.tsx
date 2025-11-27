@@ -174,22 +174,17 @@ export const KitchenMonitor: React.FC<KitchenMonitorProps> = ({ orders, updateOr
     const { addToast } = useToast();
 
     const activeOrders = useMemo(() => {
-        const filtered = selectedSedeId === 'global'
-            ? orders.filter(o => o.status === 'open')
-            : orders.filter(o => o.status === 'open' && o.sedeId === selectedSedeId);
-        
-        return filtered.sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    }, [orders, selectedSedeId]);
+        return orders
+            .filter(o => o.status === 'open')
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }, [orders]);
 
     const recentCompletedOrders = useMemo(() => {
-        const filtered = selectedSedeId === 'global'
-            ? orders.filter(o => o.status === 'ready')
-            : orders.filter(o => o.status === 'ready' && o.sedeId === selectedSedeId);
-            
-        return filtered
+        return orders
+            .filter(o => o.status === 'ready')
             .sort((a,b) => new Date(b.readyAt || b.createdAt).getTime() - new Date(a.readyAt || a.createdAt).getTime())
             .slice(0, 8);
-    }, [orders, selectedSedeId]);
+    }, [orders]);
 
     const previousOrdersCount = useRef(activeOrders.length);
 

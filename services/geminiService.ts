@@ -1,38 +1,36 @@
+// FIX: Manually define ImportMeta for Vite env variables to resolve TypeScript errors.
+// By wrapping this in `declare global`, we are augmenting the global ImportMeta interface
+// rather than declaring a new local one. This makes it available project-wide.
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly VITE_API_KEY?: string;
+      readonly VITE_SUPABASE_URL?: string;
+      readonly VITE_SUPABASE_ANON_KEY?: string;
+    };
+  }
+}
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { PaymentMethod, MenuItem, Table, Sale, InventoryItem, Order, User, InventoryUnit, Customer, ShoppingListItem, ProfeLocoActionResponse, ProfeLocoAction, View, ExpenseCategory, ParsedOrder, ParsedOrderItem, ParsedCustomerInfo, ParsedInventoryCommand, ShoppingList, ProfeLocoResponse } from '../types';
 import { formatPrice } from "../utils/formatPrice";
 import { SALSAS_ALITAS, SALSAS_PAPAS } from "../constants";
 
-declare const process: any;
+// Safe access to environment variables
+const env = import.meta.env || {};
+const apiKey = env.VITE_API_KEY;
 
-const getAiClient = (specificKey?: string) => {
-  // 1. Use specific key if provided (for testing connection)
-  if (specificKey) {
+const getAiClient = () => {
+  if (apiKey) {
       try {
-          return new GoogleGenAI({ apiKey: specificKey });
-      } catch (e) { return null; }
-  }
-
-  // 2. Try LocalStorage (User configured in App Settings) - PRIORITY
-  const localKey = localStorage.getItem('GEMINI_API_KEY');
-  if (localKey) {
-      try {
-          return new GoogleGenAI({ apiKey: localKey });
+          return new GoogleGenAI({ apiKey });
       } catch (e) { 
-          console.error("Invalid LocalStorage Key");
+          console.error("Error initializing GoogleGenAI", e);
+          return null;
       }
   }
 
-  // 3. Fallback to Env (Dev/Deployment)
-  const envKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : '';
-  
-  if (envKey) {
-      try {
-          return new GoogleGenAI({ apiKey: envKey });
-      } catch (e) { console.error("Invalid Env Key"); }
-  }
-
-  console.error("Gemini API Key not found in LocalStorage or process.env.");
+  console.error("Gemini API Key not found. Ensure VITE_API_KEY is set in your environment variables.");
   return null;
 };
 
@@ -69,8 +67,8 @@ const handleGeminiError = (error: unknown, defaultMessage: string): string => {
     return defaultMessage;
 };
 
-export const validateConnection = async (testKey?: string): Promise<boolean> => {
-    const ai = getAiClient(testKey);
+export const validateConnection = async (): Promise<boolean> => {
+    const ai = getAiClient();
     if (!ai) return false;
     try {
         await ai.models.generateContent({

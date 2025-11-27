@@ -24,7 +24,6 @@ const saveLocal = (key: string, data: any) => {
     }
 };
 
-// FIX: Changed fallback type from `any[]` to `any` to allow both arrays and objects as fallbacks.
 const loadLocal = (key: string, fallback: any = []) => {
     try {
         const stored = localStorage.getItem(`loco_offline_${key}`);
@@ -134,7 +133,6 @@ export const db = {
     subscribe: (tables: string[], callback: (payload: any) => void) => {
         if (!supabase) return null;
         
-        // Clean up any existing channels with the same name to prevent duplicates
         const channelName = 'db-changes-sync';
         const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
         if (existing) {
@@ -143,13 +141,11 @@ export const db = {
 
         const channel = supabase.channel(channelName);
         
-        // Listen to all changes on public schema
         channel.on(
             'postgres_changes',
             { event: '*', schema: 'public' }, 
             (payload) => {
-                // Filter by relevant tables if needed, or just pass everything
-                if (tables.includes(payload.table)) {
+                if (tables.includes('*') || tables.includes(payload.table)) {
                     callback(payload);
                 }
             }

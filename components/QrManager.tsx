@@ -100,4 +100,24 @@ export const QrManager: React.FC<QrManagerProps> = ({ settings, onSaveSettings }
                         )}
                     </div>
                     <p className="text-xs text-gray-500 mt-4 max-w-xs truncate">{publicUrl}</p>
-                
+                </div>
+
+                {/* Placeholder for settings or actions */}
+                <div className="bg-[var(--card-bg)] p-8 rounded-xl border border-[var(--card-border)]">
+                    <h3 className="text-2xl font-bold text-white mb-4">Opciones</h3>
+                    <div className="space-y-3">
+                        <button onClick={copyUrlToClipboard} className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-3 rounded-lg transition-colors">
+                            <ShareIcon className="w-5 h-5"/> Copiar URL del Menú
+                        </button>
+                        <button onClick={() => downloadAs('png')} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">
+                            <DownloadIcon className="w-5 h-5"/> Descargar PNG
+                        </button>
+                        <button onClick={() => downloadAs('svg')} className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg transition-colors">
+                            <DownloadIcon className="w-5 h-5"/> Descargar SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

@@ -29,42 +29,24 @@ interface AdminSettingsProps {
 }
 
 const ApiKeyManagement: React.FC = () => {
-    const [apiKey, setApiKey] = useState('');
     const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
     const { addToast } = useToast();
 
     useEffect(() => {
-        const storedKey = localStorage.getItem('GEMINI_API_KEY');
-        if (storedKey) setApiKey(storedKey);
+        // Test connection on component mount
+        handleTest();
     }, []);
 
-    const handleSave = () => {
-        if (apiKey.trim()) {
-            localStorage.setItem('GEMINI_API_KEY', apiKey.trim());
-            addToast('API Key guardada. Reiniciando sistema...', 'success');
-            // Force reload to ensure all services pick up the new key
-            setTimeout(() => window.location.reload(), 1500);
-        } else {
-            localStorage.removeItem('GEMINI_API_KEY');
-            addToast('API Key eliminada.', 'info');
-            setTimeout(() => window.location.reload(), 1000);
-        }
-    };
-
     const handleTest = async () => {
-        if (!apiKey) {
-            addToast('Ingresa una clave para probar.', 'error');
-            return;
-        }
         setTestStatus('testing');
-        // Pass the current apiKey state to validate connection with what is typed
-        const isConnected = await validateConnection(apiKey);
+        // The `validateConnection` function no longer takes an argument.
+        const isConnected = await validateConnection();
         if (isConnected) {
             setTestStatus('success');
             addToast('¡Conexión con IA exitosa!', 'success');
         } else {
             setTestStatus('error');
-            addToast('Error de conexión. Verifica la clave.', 'error');
+            addToast('Error de conexión. Verifica la configuración del API Key.', 'error');
         }
     };
 
@@ -74,29 +56,14 @@ const ApiKeyManagement: React.FC = () => {
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     <SparklesIcon className="text-purple-400"/> Configuración de Inteligencia Artificial
                 </h3>
-                <p className="text-gray-400 text-sm">Conecta Loco Alitas con Google Gemini para habilitar funciones inteligentes.</p>
+                <p className="text-gray-400 text-sm">Verifica el estado de la conexión con Google Gemini.</p>
             </div>
 
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-2">Google Gemini API Key</label>
+                    <label className="block text-sm font-semibold text-gray-300 mb-2">Estado de la Conexión con Gemini API</label>
                     <div className="flex gap-2">
-                        <input 
-                            type="password" 
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="flex-1 p-3 rounded bg-black/30 border border-[var(--card-border)] text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 font-mono text-sm"
-                        />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                        La clave se guardará en este dispositivo (Local Storage).
-                    </p>
-                </div>
-
-                <div className="flex justify-between pt-4 items-center">
-                    <div className="flex items-center gap-2">
-                        <button 
+                         <button 
                             onClick={handleTest}
                             disabled={testStatus === 'testing'}
                             className={`text-sm px-3 py-2 rounded border transition-colors flex items-center gap-2 ${
@@ -111,12 +78,9 @@ const ApiKeyManagement: React.FC = () => {
                             {testStatus === 'idle' ? 'Probar Conexión' : (testStatus === 'testing' ? 'Verificando...' : (testStatus === 'success' ? 'Conectado' : 'Falló'))}
                         </button>
                     </div>
-                    <button 
-                        onClick={handleSave} 
-                        className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
-                    >
-                        Guardar y Recargar
-                    </button>
+                    <p className="text-xs text-gray-500 mt-2">
+                        La API Key se configura en Netlify con el nombre <code>VITE_API_KEY</code>.
+                    </p>
                 </div>
             </div>
         </div>

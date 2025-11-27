@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { PublicMenu } from './PublicMenu';
 import { db } from '../services/db';
 import type { MenuItem, CategoryConfig, PrinterSettings } from '../types';
-// FIX: Renamed `INITIAL_MENU_ITEMS` to `BASE_MENU_ITEMS` to match the exported variable from `constants.ts`.
 import { BASE_MENU_ITEMS, INITIAL_CATEGORY_CONFIG, INITIAL_PRINTER_SETTINGS } from '../constants';
 
 const PublicApp: React.FC = () => {

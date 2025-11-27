@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { InventoryItem, Sale, MenuItem, ShoppingList } from '../types';
 import { useToast } from '../hooks/useToast';
@@ -73,7 +74,8 @@ export const ShoppingListModal: React.FC<ShoppingListModalProps> = ({ isOpen, on
 
         recognition.onstart = () => setStep('listening');
         recognition.onend = () => {
-            setStep(prev => prev === 'listening' ? 'idle' : prev);
+            // Safety check although type system might complain if inferred wrongly
+            setStep('idle');
         };
         recognition.onerror = () => addToast('Error de micrófono.', 'error');
         

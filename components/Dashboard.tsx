@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Sale, MenuItem, Table, PaymentMethod, User, Sede } from '../types';
 import { formatPrice } from '../utils/formatPrice';
@@ -67,12 +68,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ sales, menuItems, tables, 
   
   const viewTitle = selectedSedeId === 'global' ? 'Visión Global' : (sedes.find(s => s.id === selectedSedeId)?.name || 'Dashboard');
 
+  // Safe access to user name to prevent crash if data is corrupted
+  const displayName = (currentUser?.name || 'Usuario').split(' ')[0].toUpperCase();
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
             <h2 className="text-4xl font-bold text-white font-bangers tracking-wide">
-                HOLA, <span className="text-[var(--accent-yellow)]">{currentUser.name.split(' ')[0].toUpperCase()}</span>
+                HOLA, <span className="text-[var(--accent-yellow)]">{displayName}</span>
             </h2>
             <p className="text-gray-400 text-sm">Estás viendo: <span className="font-bold text-purple-400">{viewTitle}</span></p>
         </div>

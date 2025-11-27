@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { PrinterSettings, PurchasingContact } from '../types';
 import { SettingsIcon, SparklesIcon, PrinterIcon, CheckCircleIcon, XIcon, MotorcycleIcon, UserIcon, PlusIcon, TrashIcon } from './Icons';

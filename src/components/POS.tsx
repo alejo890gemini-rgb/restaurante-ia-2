@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import type { MenuItem, Table, Order, OrderItem, MenuItemCategory, Sauce, OrderType, PaymentMethod, PrinterSettings, User, Zone, CategoryConfig, ParsedOrder } from '../types';
 import { SALSAS_ALITAS, SALSAS_PAPAS, SUBMENU_CHOICES, GELATO_FLAVORS } from '../constants';

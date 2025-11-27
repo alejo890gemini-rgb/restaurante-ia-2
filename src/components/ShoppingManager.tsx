@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import type { InventoryItem, Sale, MenuItem, ShoppingListItem, ShoppingList } from '../types';
 import { useToast } from '../hooks/useToast';
@@ -76,7 +77,7 @@ export const ShoppingManager: React.FC<ShoppingManagerProps> = ({ inventoryItems
             const result = await generateShoppingList(inventoryItems, sales, menuItems);
             if (result && Object.keys(result).length > 0) {
                 const newList: ShoppingListItem[] = [];
-                Object.entries(result).forEach(([category, items]) => {
+                (Object.entries(result) as [string, { name: string, suggestedQuantity: string, justification: string }[]][]).forEach(([category, items]) => {
                     items.forEach(item => {
                         newList.push({
                             id: `${category}-${item.name}-${Math.random()}`,

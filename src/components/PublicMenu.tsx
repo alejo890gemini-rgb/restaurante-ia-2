@@ -1,3 +1,4 @@
+
 import React, { useMemo, useRef } from 'react';
 import type { MenuItem, CategoryConfig, PrinterSettings } from '../types';
 import { RestauranteIAIcon } from './Icons';

@@ -1,3 +1,4 @@
+
 import type { Order, PrinterSettings, Table, OrderItem } from '../types';
 import { formatPrice } from '../utils/formatPrice';
 

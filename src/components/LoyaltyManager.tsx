@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { LoyaltySettings, LoyaltyTier, LoyaltyReward, MenuItem } from '../types';
 import { AwardIcon, PlusIcon, EditIcon, TrashIcon, XIcon, SparklesIcon } from './Icons';

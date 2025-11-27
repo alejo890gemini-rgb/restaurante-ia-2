@@ -1,3 +1,4 @@
+
 // FIX: Manually define ImportMeta for Vite env variables to resolve TypeScript errors.
 // By wrapping this in `declare global`, we are augmenting the global ImportMeta interface
 // rather than declaring a new local one. This makes it available project-wide.
@@ -17,8 +18,15 @@ import { formatPrice } from "../utils/formatPrice";
 import { SALSAS_ALITAS, SALSAS_PAPAS } from "../constants";
 
 // Safe access to environment variables
-const env = import.meta.env || {};
-const apiKey = env.VITE_API_KEY;
+const getEnvVar = (key: string) => {
+    try {
+        return (import.meta as any).env?.[key];
+    } catch {
+        return undefined;
+    }
+};
+
+const apiKey = getEnvVar('VITE_API_KEY');
 
 const getAiClient = () => {
   if (apiKey) {
